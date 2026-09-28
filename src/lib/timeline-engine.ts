@@ -1,10 +1,12 @@
-import type { Dataset, PhotoDay } from './types.js';
+import type { Dataset, PhotoDay, PhotoRecord } from './types.js';
 
 export const PHI = 1.2;
 export const SIGMA_MIN = 1.4;
 export const DEAD = 0.045;
 export const SCROLL_GAIN = 0.32;
 export const FINE_GAIN = 0.22;
+
+const FIXED_OFFSET = 24;
 
 export interface EngineState {
   focus: number;
@@ -89,6 +91,8 @@ export function computeLayout(
   minSize: number,
   maxSize: number,
   pitchMax: number,
+  photos: PhotoRecord[],
+  selectedIndex: number | null,
 ): PhotoLayout[] {
   const { days, minDay, numDays } = state;
   const pad = 10;
@@ -96,7 +100,7 @@ export function computeLayout(
   const sigma = sigmaAt(state, focus);
 
   const layouts: PhotoLayout[] = [];
-  const groupInfos: { e: number; tn: number; size: number; pitch: number; fanHalf: number }[] = [];
+  const groupInfos: { e: number; tn: number; size: number; pitch: number }[] = [];
 
   for (let gi = 0; gi < days.length; gi++) {
     const d = focus - days[gi].day;
@@ -104,13 +108,10 @@ export function computeLayout(
     const tn = opennessFromExp(e);
     const size = minSize + tn * (maxSize - minSize);
     const pitch = Math.min(1180 / days[gi].photos.length, Math.max(size + 12, 30 + tn * (pitchMax - 30)));
-    const fanHalf = ((days[gi].photos.length - 1) / 2) * pitch + size / 2;
-    groupInfos.push({ e, tn, size, pitch, fanHalf });
+    groupInfos.push({ e, tn, size, pitch });
   }
 
-  const fx = pad + ((focus - minDay) / numDays) * span;
-  const roomL = Math.max(0, fx - pad - 34);
-  const roomR = Math.max(0, pad + span - fx - 34);
+  const centerX = pad + span / 2;
 
   let photoIndex = 0;
   for (let gi = 0; gi < days.length; gi++) {
@@ -119,27 +120,46 @@ export function computeLayout(
 
     for (let k = 0; k < group.photos.length; k++) {
       const d = focus - group.day;
-      let x = pad + ((group.day - minDay) / numDays) * span + (k - (group.photos.length - 1) / 2) * info.pitch;
+      const baseX = pad + ((group.day - minDay) / numDays) * span + (k - (group.photos.length - 1) / 2) * info.pitch;
 
-      let pushMag = 0;
+      let x = baseX;
       if (Math.abs(d) >= 0.5) {
-        pushMag = Math.min(
-          (info.fanHalf + 16 + Math.abs(d) * 20) * clamp(info.e / 0.4, 0, 1),
-          300,
-          roomL,
-          roomR,
-        );
+        const dir = d < 0 ? -1 : 1;
+        x = baseX + dir * FIXED_OFFSET;
       }
 
-      x = clamp(x + (d < 0 ? -1 : d > 0 ? 1 : 0) * pushMag, pad + info.size / 2, pad + span - info.size / 2);
+      const photo = photos[photoIndex];
+      const aspect = photo && photo.width > 0 && photo.height > 0
+        ? photo.width / photo.height
+        : 1;
+
+      let w = info.size;
+      let h = info.size;
+      if (aspect >= 1) {
+        w = info.size * Math.min(aspect, 2.5);
+      } else {
+        h = info.size / Math.max(aspect, 0.4);
+      }
+
+      let z = 1 + Math.round(info.tn * 100);
+      let targetX = x;
+
+      if (selectedIndex === photoIndex) {
+        targetX = centerX;
+        w *= 1.3;
+        h *= 1.3;
+        z = 1000;
+      }
+
+      x = clamp(targetX, pad + w / 2, pad + span - w / 2);
       const y = cloudHeight - (4 + (k % 5) * (info.tn < 0.02 ? 58 : 20)) - info.tn * 14;
 
       layouts.push({
         x,
         y,
-        w: info.size,
-        h: info.size,
-        z: 1 + Math.round(info.tn * 100),
+        w,
+        h,
+        z,
         o: info.tn,
         day: group.day,
         groupIndex: gi,
