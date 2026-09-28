@@ -93,6 +93,7 @@ export function computeLayout(
   pitchMax: number,
   photos: PhotoRecord[],
   selectedIndex: number | null,
+  dpr: number,
 ): PhotoLayout[] {
   const { days, minDay, numDays } = state;
   const pad = 10;
@@ -133,13 +134,12 @@ export function computeLayout(
         ? photo.width / photo.height
         : 1;
 
-      let w = info.size;
-      let h = info.size;
-      if (aspect >= 1) {
-        w = info.size * Math.min(aspect, 2.5);
-      } else {
-        h = info.size / Math.max(aspect, 0.4);
-      }
+      /* Area-preserving and aspect-exact: w·h = size², w/h = aspect. */
+      const shortEdge = clamp(info.size * Math.sqrt(Math.min(aspect, 1)), info.size * 0.45, info.size);
+      const longEdge = shortEdge * Math.max(aspect, 1 / aspect);
+
+      let w = aspect >= 1 ? longEdge : shortEdge;
+      let h = aspect >= 1 ? shortEdge : longEdge;
 
       let z = 1 + Math.round(info.tn * 100);
       let targetX = x;
@@ -164,6 +164,14 @@ export function computeLayout(
             w = maxW;
             h = w / aspect;
           }
+        }
+
+        /* Never upscale past the source's own pixels, so the blow-up stays
+           sharp: cap at native / dpr (1 image pixel per device pixel). */
+        if (photo && photo.width > 0 && photo.height > 0) {
+          const scale = Math.min(1, photo.width / dpr / w, photo.height / dpr / h);
+          w *= scale;
+          h *= scale;
         }
 
         targetX = centerX;

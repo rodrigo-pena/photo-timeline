@@ -53,7 +53,10 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     measure();
     currentState = state;
     currentFocus = focus;
-    layouts = computeLayout(state, focus, width, cloudHeight, 20, 190, 186, photos, selectedIndex);
+    layouts = computeLayout(
+      state, focus, width, cloudHeight, 20, 190, 186,
+      photos, selectedIndex, window.devicePixelRatio || 1,
+    );
 
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
@@ -76,11 +79,13 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     for (let i = 0; i < layouts.length; i++) {
       const l = layouts[i];
       const centerY = l.y - l.h / 2;
-      const dx = x - l.x;
-      const dy = y - centerY;
-      const radius = Math.max(26, Math.max(l.w, l.h) / 2);
+      const padX = Math.max(26 - l.w / 2, 8);
+      const padY = Math.max(26 - l.h / 2, 8);
 
-      if (dx * dx + dy * dy < radius * radius && l.z > bestZ) {
+      const withinX = Math.abs(x - l.x) <= l.w / 2 + padX;
+      const withinY = Math.abs(y - centerY) <= l.h / 2 + padY;
+
+      if (withinX && withinY && l.z > bestZ) {
         bestZ = l.z;
         bestIndex = i;
       }
