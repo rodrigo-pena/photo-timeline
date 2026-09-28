@@ -249,6 +249,7 @@ b { font-weight: 500; }
   border: 1px solid color-mix(in oklab, var(--fg) calc(14% + var(--o) * 18%), var(--border));
   box-shadow: 0 calc(var(--o) * 9px) calc(var(--o) * 26px) color-mix(in oklab, var(--fg) calc(var(--o) * 15%), transparent);
   border-radius: calc(var(--radius-sm) + var(--o) * 3px);
+  transition: transform 0.35s cubic-bezier(0.2, 0, 0, 1), width 0.35s cubic-bezier(0.2, 0, 0, 1), height 0.35s cubic-bezier(0.2, 0, 0, 1);
 }
 .tl-thumb.is-sel { outline: 2px solid var(--signal); outline-offset: 2px; }
 .tl-chip {
