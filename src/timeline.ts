@@ -128,6 +128,9 @@ async function main(): Promise<void> {
         if (idx !== null) {
           cloudRenderer.select(idx);
           recordPanel.show(photos[idx]);
+          /* The pill labels the focus, so move the focus onto the selected
+             photo — otherwise the tooltip keeps reporting a stale date. */
+          setTarget(photos[idx].date);
         } else {
           cloudRenderer.deselect();
           recordPanel.close();
