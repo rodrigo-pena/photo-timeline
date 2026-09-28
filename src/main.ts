@@ -1,7 +1,7 @@
-import { initTheme } from './lib/theme.js';
+import { clearPhotos, countPhotos, putPhotos } from './lib/db.js';
 import { processFiles } from './lib/exif.js';
-import { putPhotos, countPhotos, clearPhotos } from './lib/db.js';
 import { addSkipped, clearSkipped } from './lib/skip-count.js';
+import { initTheme } from './lib/theme.js';
 
 initTheme();
 
@@ -75,7 +75,7 @@ folderInput.addEventListener('change', () => {
 resetBtn.addEventListener('click', async () => {
   await clearPhotos();
   clearSkipped();
-  footStatus.textContent = 'Nothing leaves this machine.';
+  footStatus.textContent = 'Data privacy: nothing leaves your machine';
   skipLink.textContent = 'Skip to the timeline →';
   resetBtn.hidden = true;
 });
