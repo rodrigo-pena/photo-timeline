@@ -6,6 +6,7 @@ import { createCloudRenderer } from './lib/cloud.js';
 import { createAxisRenderer } from './lib/axis.js';
 import { computeHistogram, renderHistogram } from './lib/histogram.js';
 import { initRecordPanel } from './lib/record-panel.js';
+import { getSkipped, clearSkipped } from './lib/skip-count.js';
 
 initTheme();
 
@@ -39,7 +40,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const dataset = buildDataset(photos, 0);
+  const dataset = buildDataset(photos, getSkipped());
   const engine = createEngine(dataset);
 
   const stage = document.getElementById('tl-stage') as HTMLElement;
@@ -59,7 +60,9 @@ async function main(): Promise<void> {
   const y0 = new Date(dataset.minDay * DAY_MS).getUTCFullYear();
   const y1 = new Date(dataset.maxDay * DAY_MS).getUTCFullYear();
   datasetLabel.textContent = `${photos.length} records · ${y0}–${y1}`;
-  footStatus.textContent = `${photos.length} photos · local only`;
+  footStatus.textContent = dataset.skippedCount > 0
+    ? `${photos.length} photos · ${dataset.skippedCount} skipped (no EXIF date) · local only`
+    : `${photos.length} photos · local only`;
 
   const histData = computeHistogram(dataset.days, engine.minDay, engine.numDays);
   const svg = plot.querySelector('svg')!;
@@ -172,6 +175,7 @@ async function main(): Promise<void> {
   resetLink.addEventListener('click', async (e) => {
     e.preventDefault();
     await clearPhotos();
+    clearSkipped();
     window.location.href = 'index.html';
   });
 

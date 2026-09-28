@@ -1,6 +1,7 @@
 import { initTheme } from './lib/theme.js';
 import { processFiles } from './lib/exif.js';
 import { putPhotos, countPhotos, clearPhotos } from './lib/db.js';
+import { addSkipped, clearSkipped } from './lib/skip-count.js';
 
 initTheme();
 
@@ -27,6 +28,7 @@ async function handleFiles(files: FileList | File[]): Promise<void> {
     const { photos, skippedCount } = await processFiles(Array.from(files));
 
     if (photos.length === 0) {
+      addSkipped(skippedCount);
       statusEl.textContent = skippedCount > 0
         ? `No photos with EXIF date metadata found (${skippedCount} skipped).`
         : 'No valid photos found.';
@@ -35,6 +37,7 @@ async function handleFiles(files: FileList | File[]): Promise<void> {
     }
 
     await putPhotos(photos);
+    addSkipped(skippedCount);
 
     const total = await countPhotos();
     footStatus.textContent = `${total} photos stored locally`;
@@ -71,6 +74,7 @@ folderInput.addEventListener('change', () => {
 
 resetBtn.addEventListener('click', async () => {
   await clearPhotos();
+  clearSkipped();
   footStatus.textContent = 'Nothing leaves this machine.';
   skipLink.textContent = 'Skip to the timeline →';
   resetBtn.hidden = true;
