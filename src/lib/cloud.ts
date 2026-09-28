@@ -18,6 +18,8 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   let selectedIndex: number | null = null;
   let width = 0;
   let cloudHeight = 0;
+  let currentState: EngineState | null = null;
+  let currentFocus = 0;
 
   function measure(): void {
     width = cloudEl.clientWidth;
@@ -49,7 +51,9 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
 
   function render(state: EngineState, focus: number): void {
     measure();
-    layouts = computeLayout(state, focus, width, cloudHeight, 20, 190, 186);
+    currentState = state;
+    currentFocus = focus;
+    layouts = computeLayout(state, focus, width, cloudHeight, 20, 190, 186, photos, selectedIndex);
 
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
@@ -90,6 +94,9 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     if (elements[index]) {
       elements[index].classList.add('is-sel');
     }
+    if (currentState) {
+      render(currentState, currentFocus);
+    }
   }
 
   function deselect(): void {
@@ -97,6 +104,9 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
       elements[selectedIndex].classList.remove('is-sel');
     }
     selectedIndex = null;
+    if (currentState) {
+      render(currentState, currentFocus);
+    }
   }
 
   function resize(): void {
