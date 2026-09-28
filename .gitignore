@@ -1,0 +1,5 @@
+node_modules
+dist
+data/test-photos
+.DS_Store
+*.local

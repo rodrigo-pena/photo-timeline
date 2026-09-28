@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Photo Timeline</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('photo-timeline:theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+    })();
+  </script>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body>
+  <section class="tl-empty" data-od-id="screen-empty">
+    <header class="tl-top" data-od-id="topbar">
+      <span class="tl-mark">Photo Timeline</span>
+      <div class="tl-theme" role="group" aria-label="Colour theme">
+        <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+      </div>
+    </header>
+
+    <div class="tl-empty-mid">
+      <div>
+        <input type="file" id="tl-file" class="sr-only" multiple accept="image/*" />
+        <input type="file" id="tl-folder" class="sr-only" webkitdirectory directory multiple />
+        <div class="tl-empty-actions">
+          <button class="btn btn-primary" id="tl-choose" type="button">Choose Photos</button>
+          <button class="btn btn-ghost" id="tl-choose-folder" type="button">Choose Folder</button>
+        </div>
+        <p id="tl-err" class="mono" hidden style="margin: 16px 0 0; font-size: 12px; color: var(--muted); max-width: 34ch;"></p>
+        <p id="tl-status" class="mono" hidden style="margin: 12px 0 0; font-size: 12px; color: var(--muted);"></p>
+        <button class="btn btn-danger" id="tl-reset" type="button" hidden style="margin-top: 16px; font-size: 13px; min-height: 40px; padding: 8px 16px;">Clear all photos</button>
+      </div>
+    </div>
+
+    <footer class="tl-foot" data-od-id="statusbar">
+      <span id="tl-foot-status">Nothing leaves this machine.</span>
+      <a href="timeline.html" id="tl-skip">Skip to the timeline →</a>
+    </footer>
+  </section>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
