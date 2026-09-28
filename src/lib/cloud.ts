@@ -75,11 +75,12 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
 
     for (let i = 0; i < layouts.length; i++) {
       const l = layouts[i];
-      const dx = Math.abs(x - l.x);
-      const dy = Math.abs(y - l.y);
-      const radius = Math.max(26, l.w / 2);
+      const centerY = l.y - l.h / 2;
+      const dx = x - l.x;
+      const dy = y - centerY;
+      const radius = Math.max(26, Math.max(l.w, l.h) / 2);
 
-      if (dx < radius && dy < radius && l.z > bestZ) {
+      if (dx * dx + dy * dy < radius * radius && l.z > bestZ) {
         bestZ = l.z;
         bestIndex = i;
       }
