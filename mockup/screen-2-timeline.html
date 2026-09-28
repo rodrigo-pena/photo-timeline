@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Timeline · Photo Timeline</title>
+  <meta name="description" content="Screen 2 of the Photo Timeline mockup: the adaptive-gaussian cloud, histogram and focus dot." />
+  <link rel="stylesheet" href="assets/photo-timeline.css" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('photo-timeline:theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+    })();
+  </script>
+</head>
+<body>
+
+  <div class="tl-app" data-od-id="app-shell">
+
+    <header class="tl-top" data-od-id="topbar">
+      <div class="tl-brand">
+        <span class="tl-mark">Photo Timeline</span>
+        <span class="tl-dataset" id="tl-dataset">—</span>
+      </div>
+      <div class="tl-top-actions">
+        <div class="tl-theme" role="group" aria-label="Colour theme">
+          <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+        </div>
+        <a class="btn btn-ghost" href="screen-1-choose-photos.html">Screen 1</a>
+      </div>
+    </header>
+
+    <div class="tl-body" id="tl-body" data-info="closed">
+
+      <div class="tl-stage" id="tl-stage" tabindex="0" role="application"
+           aria-label="Photo timeline. Drag or scroll to move along dates, click a photo to read its record.">
+
+        <div class="tl-cloud" id="tl-cloud"></div>
+        <div class="tl-plot" id="tl-plot"></div>
+        <div class="tl-scale" id="tl-scale"></div>
+      </div>
+
+      <aside class="tl-info" id="tl-info" data-has-sel="false" data-od-id="info-panel">
+        <button class="tl-info-tab" id="tl-info-tab" type="button" aria-expanded="false" aria-controls="tl-info-panel">
+          <span class="tl-info-dot" aria-hidden="true"></span>
+          <span class="mono">Record</span>
+        </button>
+        <div class="tl-info-panel" id="tl-info-panel" hidden>
+          <div class="tl-info-head">
+            <span>Record</span>
+            <button class="tl-info-close" id="tl-info-close" type="button" aria-label="Close record panel">✕</button>
+          </div>
+          <div class="tl-info-body" id="tl-info-body"></div>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="tl-foot" data-od-id="statusbar">
+      <span class="tl-hint">drag · scroll · ← → · click a photo</span>
+      <span>local mockup · illustrative records</span>
+    </footer>
+  </div>
+
+  <script src="assets/photo-timeline.js"></script>
+  <script>
+    TL.initTheme();
+
+    /* ── dataset ────────────────────────────────────────────────────── */
+    TL.setDataset(TL.placeholderPhotos(), {
+      kind: 'placeholder',
+      label: 'sample record',
+      illustrative: true
+    });
+
+    var label = document.getElementById('tl-dataset');
+    /* ── panels ─────────────────────────────────────────────────────── */
+    var stage = document.getElementById('tl-stage');
+
+    var info = TL.initInfoPanel({
+      onClose: function () { timeline && timeline.close(); }
+    });
+
+    var timeline = TL.initTimeline({
+      stage: stage,
+      onSelect: function (photo) { info.show(photo); }
+    });
+
+    /* dataset caption, computed from what actually loaded */
+    (function caption() {
+      var p = TL.placeholderPhotos();
+      var first = p.reduce(function (a, b) { return b.day < a.day ? b : a; }).day;
+      var last = p.reduce(function (a, b) { return b.day > a.day ? b : a; }).day;
+      var y0 = new Date(first * 86400000).getUTCFullYear();
+      var y1 = new Date(last * 86400000).getUTCFullYear();
+      label.textContent = p.length + ' records · ' + y0 + '–' + y1 + ' · placeholder set';
+    })();
+  </script>
+</body>
+</html>
