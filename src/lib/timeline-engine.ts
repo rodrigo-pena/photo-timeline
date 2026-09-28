@@ -143,16 +143,36 @@ export function computeLayout(
 
       let z = 1 + Math.round(info.tn * 100);
       let targetX = x;
+      let targetY = cloudHeight - (4 + (k % 5) * (info.tn < 0.02 ? 58 : 20)) - info.tn * 14;
 
       if (selectedIndex === photoIndex) {
+        const margin = 24;
+        const maxH = cloudHeight - margin * 2;
+        const maxW = width - margin * 2;
+
+        if (aspect >= 1) {
+          w = maxW;
+          h = w / aspect;
+          if (h > maxH) {
+            h = maxH;
+            w = h * aspect;
+          }
+        } else {
+          h = maxH;
+          w = h * aspect;
+          if (w > maxW) {
+            w = maxW;
+            h = w / aspect;
+          }
+        }
+
         targetX = centerX;
-        w *= 1.3;
-        h *= 1.3;
+        targetY = cloudHeight / 2 + h / 2;
         z = 1000;
       }
 
       x = clamp(targetX, pad + w / 2, pad + span - w / 2);
-      const y = cloudHeight - (4 + (k % 5) * (info.tn < 0.02 ? 58 : 20)) - info.tn * 14;
+      const y = targetY;
 
       layouts.push({
         x,
