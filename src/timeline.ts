@@ -11,7 +11,7 @@ initTheme();
 
 const DAY_MS = 86400000;
 
-function buildDataset(photos: PhotoRecord[], failedCount: number): Dataset {
+function buildDataset(photos: PhotoRecord[], skippedCount: number): Dataset {
   const sorted = [...photos].sort((a, b) => a.date - b.date);
 
   const dayMap = new Map<number, PhotoRecord[]>();
@@ -28,7 +28,7 @@ function buildDataset(photos: PhotoRecord[], failedCount: number): Dataset {
   const minDay = days.length > 0 ? days[0].day : 0;
   const maxDay = days.length > 0 ? days[days.length - 1].day : 0;
 
-  return { photos: sorted, days, minDay, maxDay, failedCount };
+  return { photos: sorted, days, minDay, maxDay, skippedCount };
 }
 
 async function main(): Promise<void> {

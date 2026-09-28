@@ -23,5 +23,5 @@ export interface Dataset {
   days: PhotoDay[];
   minDay: number;
   maxDay: number;
-  failedCount: number;
+  skippedCount: number;
 }

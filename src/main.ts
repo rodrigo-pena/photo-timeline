@@ -24,11 +24,11 @@ async function handleFiles(files: FileList | File[]): Promise<void> {
   statusEl.textContent = `Processing ${files.length} files…`;
 
   try {
-    const { photos, failedCount } = await processFiles(Array.from(files));
+    const { photos, skippedCount } = await processFiles(Array.from(files));
 
     if (photos.length === 0) {
-      statusEl.textContent = failedCount > 0
-        ? `No photos with date metadata found (${failedCount} skipped).`
+      statusEl.textContent = skippedCount > 0
+        ? `No photos with EXIF date metadata found (${skippedCount} skipped).`
         : 'No valid photos found.';
       processing = false;
       return;
@@ -39,8 +39,8 @@ async function handleFiles(files: FileList | File[]): Promise<void> {
     const total = await countPhotos();
     footStatus.textContent = `${total} photos stored locally`;
 
-    if (failedCount > 0) {
-      statusEl.textContent = `${photos.length} photos added, ${failedCount} skipped (no date metadata).`;
+    if (skippedCount > 0) {
+      statusEl.textContent = `${photos.length} photos added, ${skippedCount} skipped (no EXIF date).`;
     } else {
       statusEl.textContent = `${photos.length} photos added.`;
     }

@@ -5,12 +5,12 @@ const DAY_MS = 86400000;
 
 export interface ProcessResult {
   photos: PhotoRecord[];
-  failedCount: number;
+  skippedCount: number;
 }
 
 export async function processFiles(files: File[]): Promise<ProcessResult> {
   const photos: PhotoRecord[] = [];
-  let failedCount = 0;
+  let skippedCount = 0;
 
   for (const file of files) {
     if (!file.type.startsWith('image/') && !/\.(jpe?g|png|heic|gif|webp|tiff?|bmp|avif)$/i.test(file.name)) {
@@ -24,8 +24,15 @@ export async function processFiles(files: File[]): Promise<ProcessResult> {
 
       const dateMs = data?.DateTimeOriginal?.getTime()
         ?? data?.CreateDate?.getTime()
-        ?? data?.ModifyDate?.getTime()
-        ?? file.lastModified;
+        ?? data?.ModifyDate?.getTime();
+
+      /* Only EXIF counts as a capture date. The file's own mtime is not a
+         capture date — copying, syncing and exporting all rewrite it — so a
+         photo without a usable EXIF date is skipped rather than misdated. */
+      if (dateMs === undefined || !Number.isFinite(dateMs)) {
+        skippedCount++;
+        continue;
+      }
 
       const day = Math.floor(dateMs / DAY_MS);
 
@@ -48,11 +55,11 @@ export async function processFiles(files: File[]): Promise<ProcessResult> {
 
       photos.push(photo);
     } catch {
-      failedCount++;
+      skippedCount++;
     }
   }
 
-  return { photos, failedCount };
+  return { photos, skippedCount };
 }
 
 function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
