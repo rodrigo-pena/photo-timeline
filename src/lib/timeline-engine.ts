@@ -1,4 +1,4 @@
-import type { Dataset, PhotoDay, PhotoRecord } from './types.js';
+import type { Dataset, PhotoDay } from './types.js';
 
 export const PHI = 1.2;
 export const SIGMA_MIN = 1.4;
@@ -91,7 +91,6 @@ export function computeLayout(
   minSize: number,
   maxSize: number,
   pitchMax: number,
-  photos: PhotoRecord[],
   selectedIndex: number | null,
   dpr: number,
 ): PhotoLayout[] {
@@ -114,6 +113,9 @@ export function computeLayout(
 
   const centerX = pad + span / 2;
 
+  /* The flattened walk over `days` is the single ordering authority for the
+     cloud: layout i belongs to the i-th photo of `days`, so a card's position
+     and the photo drawn into it can never come from different arrays. */
   let photoIndex = 0;
   for (let gi = 0; gi < days.length; gi++) {
     const info = groupInfos[gi];
@@ -129,7 +131,7 @@ export function computeLayout(
         x = baseX + dir * FIXED_OFFSET;
       }
 
-      const photo = photos[photoIndex];
+      const photo = group.photos[k];
       const aspect = photo && photo.width > 0 && photo.height > 0
         ? photo.width / photo.height
         : 1;

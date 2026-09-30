@@ -55,7 +55,7 @@ async function main(): Promise<void> {
   const axisRenderer = createAxisRenderer(plot, scale, engine);
   const recordPanel = initRecordPanel();
 
-  cloudRenderer.updatePhotos(photos);
+  cloudRenderer.updatePhotos(dataset.days);
 
   const y0 = new Date(dataset.minDay * DAY_MS).getUTCFullYear();
   const y1 = new Date(dataset.maxDay * DAY_MS).getUTCFullYear();
@@ -125,12 +125,12 @@ async function main(): Promise<void> {
         const x = ev.clientX - rect.left;
         const y = ev.clientY - rect.top;
         const idx = cloudRenderer.getElementAt(x, y);
-        if (idx !== null) {
-          cloudRenderer.select(idx);
-          recordPanel.show(photos[idx]);
+        const photo = idx === null ? null : cloudRenderer.select(idx);
+        if (photo) {
+          recordPanel.show(photo);
           /* The pill labels the focus, so move the focus onto the selected
              photo — otherwise the tooltip keeps reporting a stale date. */
-          setTarget(photos[idx].date);
+          setTarget(photo.date);
         } else {
           cloudRenderer.deselect();
           recordPanel.close();

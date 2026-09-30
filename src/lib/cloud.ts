@@ -1,18 +1,19 @@
-import type { PhotoRecord } from './types.js';
+import type { PhotoDay, PhotoRecord } from './types.js';
 import type { EngineState, PhotoLayout } from './timeline-engine.js';
 import { computeLayout } from './timeline-engine.js';
 
 export interface CloudRenderer {
   render(state: EngineState, focus: number): void;
   getElementAt(x: number, y: number): number | null;
-  select(index: number): void;
+  select(index: number): PhotoRecord | null;
   deselect(): void;
   resize(): void;
-  updatePhotos(photos: PhotoRecord[]): void;
+  updatePhotos(days: PhotoDay[]): void;
 }
 
 export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   let photos: PhotoRecord[] = [];
+  let objectUrls: string[] = [];
   let layouts: PhotoLayout[] = [];
   let elements: HTMLElement[] = [];
   let selectedIndex: number | null = null;
@@ -27,6 +28,8 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   }
 
   function buildElements(): void {
+    for (const url of objectUrls) URL.revokeObjectURL(url);
+    objectUrls = [];
     cloudEl.innerHTML = '';
     elements = photos.map((photo, i) => {
       const el = document.createElement('div');
@@ -38,8 +41,11 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
       chip.textContent = formatDate(photo.date);
       el.appendChild(chip);
 
+      const url = URL.createObjectURL(photo.blob);
+      objectUrls.push(url);
+
       const img = document.createElement('img');
-      img.src = URL.createObjectURL(photo.blob);
+      img.src = url;
       img.alt = photo.name;
       img.draggable = false;
       el.appendChild(img);
@@ -55,7 +61,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     currentFocus = focus;
     layouts = computeLayout(
       state, focus, width, cloudHeight, 20, 190, 186,
-      photos, selectedIndex, window.devicePixelRatio || 1,
+      selectedIndex, window.devicePixelRatio || 1,
     );
 
     for (let i = 0; i < elements.length; i++) {
@@ -94,15 +100,18 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     return bestIndex;
   }
 
-  function select(index: number): void {
+  /* Returns the photo that was selected, so callers never have to re-derive it
+     from an index and risk pairing it with a card drawn somewhere else. */
+  function select(index: number): PhotoRecord | null {
+    const photo = index >= 0 && index < photos.length ? photos[index] : null;
     deselect();
+    if (photo === null) return null;
     selectedIndex = index;
-    if (elements[index]) {
-      elements[index].classList.add('is-sel');
-    }
+    elements[index].classList.add('is-sel');
     if (currentState) {
       render(currentState, currentFocus);
     }
+    return photo;
   }
 
   function deselect(): void {
@@ -119,8 +128,8 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     measure();
   }
 
-  function updatePhotos(newPhotos: PhotoRecord[]): void {
-    photos = newPhotos;
+  function updatePhotos(days: PhotoDay[]): void {
+    photos = days.flatMap((day) => day.photos);
     buildElements();
   }
 
