@@ -91,7 +91,10 @@ async function main(): Promise<void> {
   }
 
   function setTarget(day: number): void {
-    engine.target = Math.max(engine.minDay, Math.min(engine.maxDay - 0.001, day));
+    /* Clamp to maxDay itself, not a hair before it: focusing the last day in
+       the archive has to land on it, or the pill names the day before the photo
+       that was just selected. */
+    engine.target = Math.max(engine.minDay, Math.min(engine.maxDay, day));
     kick();
   }
 
