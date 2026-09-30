@@ -5,11 +5,22 @@ them in date order along an interactive timeline.
 
 ## How the timeline works
 
-Photos are grouped by day and ordered along a date axis. A kernel centered
-on the current focus date decides how "open" each photo is, which drives its size,
-vertical jitter, and stacking order. The kernel's width adapts to the spacing
-between photo days, so dense clusters open up while long quiet stretches stay
-compact.
+Photos are grouped by day and ordered along a date axis. The days themselves are
+the only ordering the layout knows about, so a card's position and the photo drawn
+into it always come from the same record.
+
+A kernel centred on the current focus date decides how "open" each day is, which
+drives its card size and how far forward it sits. The kernel's width adapts to
+the spacing between photo days, so dense clusters open up while long quiet
+stretches stay compact.
+
+Each day owns a block of cards standing on its own date. The block fans out
+sideways only as far as a budget allows — two card widths at minimum, a fraction
+of the plot and a hard number of days at most — and stacks upward for the rest,
+so a bump in the histogram grows a column right above it and no card ever drifts
+so far from its date that it reads as belonging to another one. Cards tilt a
+couple of degrees, deterministically, so a block looks like a deck thrown on a
+table rather than a grid.
 
 You can drag anywhere in the stage, scroll, or use the arrow keys (`←` `→` for one
 day, `Page Up` / `Page Down` for a week, `Home` / `End` for the archive ends) to
@@ -17,6 +28,10 @@ move the focus. Click any photo to select it: the thumbnail expands and floats t
 the centre while the record panel shows its metadata. Click the background or
 press `Escape` to deselect. A light/dark toggle sits at the top right and is
 remembered between sessions.
+
+`npm test` checks the layout invariants: that a card belongs to its own date, that
+the drift and stacking stay inside their budgets, and that the layout is
+deterministic.
 
 ## Nothing leaves your machine
 
@@ -40,6 +55,7 @@ npm install          # install dependencies
 npm run dev          # start the dev server (Vite, hot reload)
 npm run build        # type-check and build to dist/
 npm run preview      # serve the production build locally
+npm test             # run the layout invariant tests
 ```
 
 The dev server prints a local URL. Open `http://localhost:5173/` to reach the upload
@@ -50,6 +66,7 @@ screen, and `/timeline.html` for the timeline itself.
 - **Vite + TypeScript**, no UI framework.
 - **exifr** for reading capture dates from photo EXIF metadata.
 - **IndexedDB** for local photo storage.
+- **Vitest** for the layout invariants.
 - `npx tsc` runs the type-check on its own (`npm run build` runs it as part of the
   build).
 
