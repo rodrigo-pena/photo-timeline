@@ -1,5 +1,5 @@
 import type { PhotoDay, PhotoRecord } from './types.js';
-import type { EngineState, PhotoLayout } from './timeline-engine.js';
+import type { CloudConfig, EngineState, PhotoLayout } from './timeline-engine.js';
 import { computeLayout } from './timeline-engine.js';
 
 export interface CloudRenderer {
@@ -9,6 +9,29 @@ export interface CloudRenderer {
   deselect(): void;
   resize(): void;
   updatePhotos(days: PhotoDay[]): void;
+}
+
+/* The cloud's scale lives in CSS so the responsive overrides in main.css apply
+   to the layout as well as to the chrome. */
+const FALLBACK_CONFIG: CloudConfig = {
+  minSize: 20,
+  maxSize: 190,
+  fanFrac: 0.08,
+  fanDays: 120,
+};
+
+function readConfig(el: HTMLElement): CloudConfig {
+  const style = getComputedStyle(el);
+  const num = (name: string, fallback: number): number => {
+    const raw = parseFloat(style.getPropertyValue(name));
+    return Number.isFinite(raw) ? raw : fallback;
+  };
+  return {
+    minSize: num('--tl-min', FALLBACK_CONFIG.minSize),
+    maxSize: num('--tl-max', FALLBACK_CONFIG.maxSize),
+    fanFrac: num('--tl-fan-frac', FALLBACK_CONFIG.fanFrac),
+    fanDays: FALLBACK_CONFIG.fanDays,
+  };
 }
 
 export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
@@ -21,10 +44,12 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   let cloudHeight = 0;
   let currentState: EngineState | null = null;
   let currentFocus = 0;
+  let config = FALLBACK_CONFIG;
 
   function measure(): void {
     width = cloudEl.clientWidth;
     cloudHeight = cloudEl.clientHeight;
+    config = readConfig(cloudEl);
   }
 
   function buildElements(): void {
@@ -60,7 +85,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     currentState = state;
     currentFocus = focus;
     layouts = computeLayout(
-      state, focus, width, cloudHeight, 20, 190, 186,
+      state, focus, width, cloudHeight, config,
       selectedIndex, window.devicePixelRatio || 1,
     );
 
