@@ -95,7 +95,8 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
       if (!layout) continue;
 
       const s = el.style;
-      s.transform = `translate3d(${layout.x.toFixed(1)}px,${layout.y.toFixed(1)}px,0) translate(-50%,-100%)`;
+      const tilt = layout.rot !== 0 ? ` rotate(${layout.rot.toFixed(2)}deg)` : '';
+      s.transform = `translate3d(${layout.x.toFixed(1)}px,${layout.y.toFixed(1)}px,0) translate(-50%,-100%)${tilt}`;
       s.width = `${layout.w.toFixed(1)}px`;
       s.height = `${layout.h.toFixed(1)}px`;
       s.zIndex = String(layout.z);

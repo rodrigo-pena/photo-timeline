@@ -16,6 +16,9 @@ export const BOTTOM_INSET = 4;
 export const MIN_SHORT_EDGE_RATIO = 0.45;
 /** Past this a "photo" is a panorama; it would be a card wider than the plot. */
 export const MAX_ASPECT_RATIO = 1 / MIN_SHORT_EDGE_RATIO;
+/** Enough to read as a tossed deck, little enough to keep the stack legible. */
+export const MAX_TILT_DEG = 2;
+export const MAX_NUDGE_PX = 1.5;
 
 export interface CloudConfig {
   minSize: number;
@@ -175,6 +178,12 @@ function heightFactor(width: number, height: number): number {
   return aspect >= 1 ? 1 : 1 / Math.sqrt(aspect);
 }
 
+/** Stable 0…1 from an index — no Math.random, so nothing shimmers per frame. */
+function pseudoRandom(seed: number): number {
+  const s = Math.sin(seed * 12.9898) * 43758.5453;
+  return s - Math.floor(s);
+}
+
 export function computeLayout(
   state: EngineState,
   focus: number,
@@ -234,7 +243,13 @@ export function computeLayout(
       const col = k % block.cols;
       const row = Math.floor(k / block.cols);
 
-      const x = dayX + dx + (col - (block.cols - 1) / 2) * block.pitch;
+      /* A deterministic per-photo wobble, so the block reads as a deck thrown
+         on a table. Keyed off the stable index, so a card never twitches while
+         the focus is animating. */
+      const wobble = pseudoRandom(photoIndex);
+      const nudge = (pseudoRandom(photoIndex + 0.5) - 0.5) * 2 * MAX_NUDGE_PX;
+
+      const x = dayX + dx + (col - (block.cols - 1) / 2) * block.pitch + nudge;
       const y = baseline - row * block.rowH;
 
       const photo = group.photos[k];
@@ -306,7 +321,7 @@ export function computeLayout(
         day: group.day,
         groupIndex: gi,
         photoIndex: photoIndex++,
-        rot: 0,
+        rot: (wobble - 0.5) * 2 * MAX_TILT_DEG,
       });
     }
   }
