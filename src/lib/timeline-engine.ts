@@ -8,7 +8,7 @@ export const FINE_GAIN = 0.22;
 
 /* Cluster packing. A day owns a block of cards centred on the day's x: the
    block fans out horizontally by at most `fan`, and whatever does not fit
-   sideways stacks upward. These ratios are how much of a card its neighbour
+   sideways stacks upward. These ratios are how much of a card its neighbor
    covers — tightly closed, a far-off day shingles into a thin column; open,
    the same day opens into a table where every photo is legible. */
 export const PITCH_RATIO = 0.82;
@@ -30,7 +30,7 @@ export const MAX_NUDGE_PX = 1.5;
 const MAX_COLS = 24;
 /* Jitter is what makes a block look thrown rather than laid out. It is capped
    at this fraction of the card size, and again at the slack the arrangement
-   left, and again at the gap that keeps neighbouring centres at least
+   left, and again at the gap that keeps neighboring centres at least
    MIN_CENTRE_GAP of a card apart. That last cap is the guarantee: within an
    open day no card can cover another's centre — and the centre is what you
    click. */
@@ -217,7 +217,7 @@ function packDay(
   const rowH = size * cellH;
 
   /* The wobble may only spend room the arrangement actually left: the slack
-     inside the block's budget, and — so that neighbours cannot close on each
+     inside the block's budget, and — so that neighbors cannot close on each
      other — the gap that keeps them this far apart. That second cap is what
      makes the block readable: no card can end up covering another card's
      centre, and a centre is always there to click. */

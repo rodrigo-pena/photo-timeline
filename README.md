@@ -19,15 +19,12 @@ decides what shape that block takes. A day far from the focus gets a narrow
 budget and tiles its cards on a square cell, so a distant cluster stays the thin
 column that echoes the histogram. A day near the focus is given up to
 `--tl-fan-open` of the plot, and its cells reserve each card's own box, so the
-photos open out across the table with none of them hiding another. The
-arrangement is chosen rather than assumed: every column count is tried and the
-one that makes the cards largest wins, which is also what keeps the block inside
-its budget.
+photos open out across the table with none of them hiding another.
 
 The looseness scales the same way. Cards lean up to twelve degrees and wander off
 their cell, both hashed from the photo's stable index so nothing twitches while
 the focus moves, and both capped so that no card can cover another card's centre
-— a centre is always there to click. Hovering lifts a card above its neighbours.
+— a centre is always there to click. Hovering lifts a card above its neighbors.
 
 You can drag anywhere in the stage, scroll, or use the arrow keys (`←` `→` for one
 day, `Page Up` / `Page Down` for a week, `Home` / `End` for the archive ends) to
@@ -35,10 +32,6 @@ move the focus. Click any photo to select it: the thumbnail expands and floats t
 the centre while the record panel shows its metadata. Click the background or
 press `Escape` to deselect. A light/dark toggle sits at the top right and is
 remembered between sessions.
-
-`npm test` checks the layout invariants: that a card belongs to its own date, that
-no photo in an open day buries another, that every block fits the budget its
-openness allows, and that the layout is deterministic.
 
 ## Nothing leaves your machine
 

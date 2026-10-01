@@ -1,6 +1,6 @@
-import type { PhotoDay, PhotoRecord } from './types.js';
 import type { CloudConfig, EngineState, PhotoLayout } from './timeline-engine.js';
 import { computeLayout } from './timeline-engine.js';
+import type { PhotoDay, PhotoRecord } from './types.js';
 
 export interface CloudRenderer {
   render(state: EngineState, focus: number): void;
@@ -114,7 +114,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     }
   }
 
-  /* Lifts the card under the cursor above its neighbours, so a photo buried in
+  /* Lifts the card under the cursor above its neighbors, so a photo buried in
      a busy day is still one click away. Painted straight onto the two cards
      that changed rather than re-rendering the cloud on every pointer move. */
   function setHover(index: number | null): void {
