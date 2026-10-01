@@ -11,6 +11,11 @@ export interface CloudRenderer {
   updatePhotos(days: PhotoDay[]): void;
 }
 
+/* How far a hovered card rises, and where it sits in the stacking order: above
+   every layer the layout produces, below the selected card. */
+const HOVER_LIFT = 7;
+const HOVER_Z = 500000;
+
 /* The cloud's scale lives in CSS so the responsive overrides in main.css apply
    to the layout as well as to the chrome. */
 const FALLBACK_CONFIG: CloudConfig = {
@@ -42,6 +47,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   let layouts: PhotoLayout[] = [];
   let elements: HTMLElement[] = [];
   let selectedIndex: number | null = null;
+  let hoverIndex: number | null = null;
   let width = 0;
   let cloudHeight = 0;
   let currentState: EngineState | null = null;
@@ -82,6 +88,17 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     });
   }
 
+  function paint(el: HTMLElement, layout: PhotoLayout, hovered: boolean): void {
+    const s = el.style;
+    const tilt = layout.rot !== 0 ? ` rotate(${layout.rot.toFixed(2)}deg)` : '';
+    const y = layout.y - (hovered ? HOVER_LIFT : 0);
+    s.transform = `translate3d(${layout.x.toFixed(1)}px,${y.toFixed(1)}px,0) translate(-50%,-100%)${tilt}`;
+    s.width = `${layout.w.toFixed(1)}px`;
+    s.height = `${layout.h.toFixed(1)}px`;
+    s.zIndex = String(hovered ? HOVER_Z : layout.z);
+    s.setProperty('--o', layout.o.toFixed(3));
+  }
+
   function render(state: EngineState, focus: number): void {
     measure();
     currentState = state;
@@ -92,19 +109,49 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     );
 
     for (let i = 0; i < elements.length; i++) {
-      const el = elements[i];
       const layout = layouts[i];
-      if (!layout) continue;
-
-      const s = el.style;
-      const tilt = layout.rot !== 0 ? ` rotate(${layout.rot.toFixed(2)}deg)` : '';
-      s.transform = `translate3d(${layout.x.toFixed(1)}px,${layout.y.toFixed(1)}px,0) translate(-50%,-100%)${tilt}`;
-      s.width = `${layout.w.toFixed(1)}px`;
-      s.height = `${layout.h.toFixed(1)}px`;
-      s.zIndex = String(layout.z);
-      s.setProperty('--o', layout.o.toFixed(3));
+      if (layout) paint(elements[i], layout, i === hoverIndex);
     }
   }
+
+  /* Lifts the card under the cursor above its neighbours, so a photo buried in
+     a busy day is still one click away. Painted straight onto the two cards
+     that changed rather than re-rendering the cloud on every pointer move. */
+  function setHover(index: number | null): void {
+    const next = index !== null && elements[index] ? index : null;
+    if (next === hoverIndex) return;
+
+    const prev = hoverIndex;
+    hoverIndex = next;
+
+    if (prev !== null && elements[prev] && layouts[prev]) {
+      elements[prev].classList.remove('is-hover');
+      paint(elements[prev], layouts[prev], false);
+    }
+    if (next !== null && layouts[next]) {
+      elements[next].classList.add('is-hover');
+      paint(elements[next], layouts[next], true);
+    }
+  }
+
+  function hitFromEvent(e: PointerEvent): number | null {
+    const rect = cloudEl.getBoundingClientRect();
+    return getElementAt(e.clientX - rect.left, e.clientY - rect.top);
+  }
+
+  let pointerDown = false;
+  cloudEl.addEventListener('pointermove', (e: PointerEvent) => {
+    if (pointerDown) return;
+    setHover(hitFromEvent(e));
+  });
+  cloudEl.addEventListener('pointerleave', () => setHover(null));
+  cloudEl.addEventListener('pointerdown', () => {
+    pointerDown = true;
+    setHover(null);
+  });
+  window.addEventListener('pointerup', () => {
+    pointerDown = false;
+  });
 
   function getElementAt(x: number, y: number): number | null {
     let bestIndex: number | null = null;
@@ -134,6 +181,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     const photo = index >= 0 && index < photos.length ? photos[index] : null;
     deselect();
     if (photo === null) return null;
+    setHover(null);
     selectedIndex = index;
     elements[index].classList.add('is-sel');
     if (currentState) {
@@ -143,6 +191,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   }
 
   function deselect(): void {
+    setHover(null);
     if (selectedIndex !== null && elements[selectedIndex]) {
       elements[selectedIndex].classList.remove('is-sel');
     }
@@ -154,10 +203,12 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
 
   function resize(): void {
     measure();
+    setHover(null);
   }
 
   function updatePhotos(days: PhotoDay[]): void {
     photos = days.flatMap((day) => day.photos);
+    hoverIndex = null;
     buildElements();
   }
 
