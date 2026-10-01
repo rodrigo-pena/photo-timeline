@@ -17,6 +17,7 @@ const FALLBACK_CONFIG: CloudConfig = {
   minSize: 20,
   maxSize: 190,
   fanFrac: 0.08,
+  fanOpen: 0.55,
   fanDays: 120,
 };
 
@@ -30,6 +31,7 @@ function readConfig(el: HTMLElement): CloudConfig {
     minSize: num('--tl-min', FALLBACK_CONFIG.minSize),
     maxSize: num('--tl-max', FALLBACK_CONFIG.maxSize),
     fanFrac: num('--tl-fan-frac', FALLBACK_CONFIG.fanFrac),
+    fanOpen: num('--tl-fan-open', FALLBACK_CONFIG.fanOpen),
     fanDays: FALLBACK_CONFIG.fanDays,
   };
 }

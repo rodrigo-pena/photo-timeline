@@ -9,7 +9,7 @@ const WIDTH = 1232;
 const HEIGHT = 800;
 const PAD = 10;
 
-const CONFIG: CloudConfig = { minSize: 20, maxSize: 190, fanFrac: 0.08, fanDays: 120 };
+const CONFIG: CloudConfig = { minSize: 20, maxSize: 190, fanFrac: 0.08, fanOpen: 0.55, fanDays: 120 };
 
 function photo(day: number, i: number, width = 3000, height = 2000): PhotoRecord {
   return { id: `p${day}-${i}`, blob: new Blob(), name: `p${day}-${i}.jpg`, date: day, width, height };
@@ -54,6 +54,15 @@ function span(): number {
   return WIDTH - PAD * 2;
 }
 
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function smoothstep(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+}
+
 describe('computeLayout', () => {
   it('gives layout i the photo that flattened days put at i', () => {
     for (const focus of [BASE, BASE + 2000, BASE + 4600]) {
@@ -79,18 +88,16 @@ describe('computeLayout', () => {
     }
   });
 
-  it('keeps a card within a card width of its own date', () => {
+  it('keeps a card within its day block of its own date', () => {
     const state = dataset(RUN);
-    /* A day's cards may drift sideways by its fan, plus at most half a card
-       width where a block is pushed in from the edge of the plot. */
     for (const focus of [BASE, BASE + 2000, BASE + 4600]) {
       for (const l of layoutFor(focus)) {
+        /* A block may be shifted up to its own half-width to stay inside the
+           plot, and a card may sit up to a half-width off its block's centre,
+           and the final clamp may cost another card width. */
+        const budget = lerp(CONFIG.fanFrac, CONFIG.fanOpen, smoothstep(l.o)) * span();
         const drift = Math.abs(l.x - pixelAtDay(state, l.day, WIDTH));
-        const edgeRoom = Math.min(
-          pixelAtDay(state, l.day, WIDTH) - PAD,
-          PAD + span() - pixelAtDay(state, l.day, WIDTH),
-        );
-        expect(drift).toBeLessThanOrEqual(span() * CONFIG.fanFrac + Math.max(0, -edgeRoom) + l.w / 2 + 1);
+        expect(drift).toBeLessThanOrEqual(budget + l.w + 1);
       }
     }
   });
@@ -101,16 +108,21 @@ describe('computeLayout', () => {
     const spike = layouts.slice(0, 40);
     const lo = Math.min(...spike.map((l) => l.x - l.w / 2));
     const hi = Math.max(...spike.map((l) => l.x + l.w / 2));
-    expect(hi - lo).toBeLessThan(span() * CONFIG.fanFrac + CONFIG.maxSize);
+    expect(hi - lo).toBeLessThan(span() * CONFIG.fanOpen + CONFIG.maxSize * 2);
   });
 
-  it('stacks a dense day upward within the cloud height', () => {
-    const layouts = layoutFor(BASE);
-    const spike = layouts.slice(0, 40);
-    const top = Math.min(...spike.map((l) => l.y - l.h));
-    expect(top).toBeGreaterThanOrEqual(-0.5);
-    /* and it really does grow upward, not into a single row */
-    expect(new Set(spike.map((l) => Math.round(l.y))).size).toBeGreaterThan(20);
+  it('opens a focused day into a grid that fills its budget', () => {
+    /* the 40-photo spike, with the focus on it */
+    const spikeDay = BASE + 12;
+    const layouts = layoutFor(spikeDay);
+    const spike = layouts.filter((l) => l.day === spikeDay);
+    expect(Math.min(...spike.map((l) => l.y - l.h))).toBeGreaterThanOrEqual(-0.5);
+    /* more than one column and more than one row: a table, not a column */
+    expect(new Set(spike.map((l) => Math.round(l.x))).size).toBeGreaterThan(1);
+    expect(new Set(spike.map((l) => Math.round(l.y))).size).toBeGreaterThan(1);
+    /* and it takes a decent bite out of the plot it is allowed */
+    const width = Math.max(...spike.map((l) => l.x + l.w / 2)) - Math.min(...spike.map((l) => l.x - l.w / 2));
+    expect(width).toBeGreaterThan(span() * CONFIG.fanOpen * 0.5);
   });
 
   it('fits a day with more photos than the plot has rows', () => {

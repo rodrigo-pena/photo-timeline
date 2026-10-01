@@ -8,10 +8,15 @@ export const FINE_GAIN = 0.22;
 
 /* Cluster packing. A day owns a block of cards centred on the day's x: the
    block fans out horizontally by at most `fan`, and whatever does not fit
-   sideways stacks upward. These two ratios are the only things that decide how
-   much a card peeks out from behind its neighbours. */
+   sideways stacks upward. These ratios are how much of a card its neighbour
+   covers — tightly closed, a far-off day shingles into a thin column; open,
+   the same day opens into a table where every photo is legible. */
 export const PITCH_RATIO = 0.82;
 export const ROW_RATIO = 0.72;
+/** How much of the cell an open day's card fills: a little overlap, so a block
+ *  still reads as cards on a table rather than a spreadsheet. */
+export const OPEN_OVERLAP_X = 0.95;
+export const OPEN_OVERLAP_Y = 0.92;
 export const BOTTOM_INSET = 4;
 export const MIN_SHORT_EDGE_RATIO = 0.45;
 /** Past this a "photo" is a panorama; it would be a card wider than the plot. */
@@ -19,13 +24,17 @@ export const MAX_ASPECT_RATIO = 1 / MIN_SHORT_EDGE_RATIO;
 /** Enough to read as a tossed deck, little enough to keep the stack legible. */
 export const MAX_TILT_DEG = 2;
 export const MAX_NUDGE_PX = 1.5;
+/** Cap on the columns considered when choosing an arrangement. */
+const MAX_COLS = 24;
 
 export interface CloudConfig {
   minSize: number;
   maxSize: number;
-  /** Widest a single day's block may get, as a fraction of the plot width. */
+  /** Ceiling on a closed day's block width, as a fraction of the plot. */
   fanFrac: number;
-  /** Hard ceiling on the block's half-width, in days. */
+  /** Widest a fully open day's block may get, as a fraction of the plot. */
+  fanOpen: number;
+  /** Ceiling on a closed day's block half-width, in days. */
   fanDays: number;
 }
 
@@ -69,6 +78,8 @@ interface DayBlock {
   cols: number;
   pitch: number;
   rowH: number;
+  /** 0 closed, 1 fully open: how far the day has bloomed out of its column. */
+  spread: number;
 }
 
 /* Rows are ordered front to back within a day, so the layer stride has to be
@@ -133,48 +144,71 @@ export function opennessFromExp(e: number): number {
 /**
  * Packs one day's photos into a block centred on the day's x.
  *
- * The block fans out sideways only as far as `fan` allows and stacks upward for
- * the rest, so a day with forty photos grows a column directly above its date
- * instead of being scattered along the axis. `fan` is floored at two card
- * widths (small cards need a little room to be told apart) and capped both by
- * a fraction of the plot and by a hard number of days, so a card can never
- * drift so far from its date that it reads as belonging to another one.
+ * How open the day is decides how much room the block gets. A closed day keeps
+ * a narrow budget and its cards shingle on a square cell, so a distant cluster
+ * stays the thin column it has always been. An open day is given a budget of
+ * up to `fanOpen` of the plot and cells that reserve each card's own box, so
+ * the photos open out across the table and none of them hides another.
  *
- * `vFactor` is how tall the day's tallest card is relative to its scale — the
- * packing has to know it to make the stack fit the plot rather than run off
- * the top of it.
+ * The arrangement is chosen, not assumed: every column count is tried and the
+ * one that makes the cards largest wins. Because the size comes from the cell,
+ * the block is guaranteed to fit the budget in both directions — no card can be
+ * pushed off its date to make room.
+ *
+ * `aspect` is how wide the day's widest card is relative to its scale and
+ * `vFactor` how tall its tallest is; the cell has to reserve both.
  */
-function packDay(count: number, tn: number, vFactor: number, cfg: CloudConfig, geom: Geometry): DayBlock {
+function packDay(
+  count: number,
+  tn: number,
+  aspect: number,
+  vFactor: number,
+  cfg: CloudConfig,
+  geom: Geometry,
+): DayBlock {
   const { span, pxPerDay, availH } = geom;
-  const size = cfg.minSize + tn * (cfg.maxSize - cfg.minSize);
+  const spread = smoothstep(tn);
 
-  /* Two card widths is the floor — small cards need a little room to be told
-     apart — and the plot fraction is the hard ceiling, so a block can never
-     grow past its budget no matter how open its day is. */
-  const fan = Math.min(Math.max(pxPerDay * cfg.fanDays, 2 * size), span * cfg.fanFrac);
+  /* The kernel's scale is the ceiling; the block only ever wants less. */
+  const kernel = cfg.minSize + tn * (cfg.maxSize - cfg.minSize);
 
-  /* Rows we could ever show at the smallest allowed card. */
-  const maxRows = Math.max(1, Math.floor(availH / (cfg.minSize * ROW_RATIO)));
-  const colsByFan = Math.max(1, Math.floor(fan / (size * PITCH_RATIO)));
+  const fanClosed = Math.min(
+    Math.max(pxPerDay * cfg.fanDays, 2 * kernel),
+    span * cfg.fanFrac,
+  );
+  const fanOpen = span * cfg.fanOpen;
+  const fan = fanClosed + (fanOpen - fanClosed) * spread;
 
-  /* Fan out to use the budget, widening past it only when the height would
-     otherwise force an absurd number of rows. */
-  const cols = Math.min(count, Math.max(colsByFan, Math.ceil(count / maxRows)));
-  const rows = Math.ceil(count / cols);
+  /* How much room one card's cell claims per unit of card size. */
+  const cellW = lerp(PITCH_RATIO, aspect / OPEN_OVERLAP_X, spread);
+  const cellH = lerp(ROW_RATIO, vFactor / OPEN_OVERLAP_Y, spread);
 
-  const cardH = size * vFactor;
-  const pitch = cols > 1 ? Math.min(size * PITCH_RATIO, fan / cols) : 0;
-  const rowH = rows > 1
-    ? Math.max(0.5, Math.min(size * ROW_RATIO, (availH - cardH) / (rows - 1)))
-    : size * ROW_RATIO;
+  const maxCols = Math.min(count, MAX_COLS);
+  let size = 0;
+  let cols = 1;
+  for (let c = 1; c <= maxCols; c++) {
+    const rows = Math.ceil(count / c);
+    const s = Math.min(kernel, (fan / c) / cellW, (availH / rows) / cellH);
+    /* Ties go to the wider block: a day of two photos lying side by side reads
+       better than two stacked. */
+    if (s >= size) {
+      size = s;
+      cols = c;
+    }
+  }
 
-  return { tn, size, cols, pitch, rowH };
+  return { tn, size, cols, pitch: size * cellW, rowH: size * cellH, spread };
+}
+
+/** How wide a card of this aspect comes out relative to its scale. */
+function widthFactor(width: number, height: number): number {
+  if (!(width > 0) || !(height > 0)) return 1;
+  return clamp(width / height, MIN_SHORT_EDGE_RATIO, MAX_ASPECT_RATIO);
 }
 
 /** How tall a card of this aspect comes out relative to its scale. */
 function heightFactor(width: number, height: number): number {
-  if (!(width > 0) || !(height > 0)) return 1;
-  const aspect = clamp(width / height, MIN_SHORT_EDGE_RATIO, MAX_ASPECT_RATIO);
+  const aspect = widthFactor(width, height);
   return aspect >= 1 ? 1 : 1 / Math.sqrt(aspect);
 }
 
@@ -182,6 +216,15 @@ function heightFactor(width: number, height: number): number {
 function pseudoRandom(seed: number): number {
   const s = Math.sin(seed * 12.9898) * 43758.5453;
   return s - Math.floor(s);
+}
+
+function smoothstep(t: number): number {
+  const x = clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }
 
 export function computeLayout(
@@ -215,11 +258,13 @@ export function computeLayout(
     const group = days[gi];
     const d = focus - group.day;
     const e = Math.exp(-(d * d) / (2 * sigma * sigma));
+    let aspect = 1;
     let vFactor = 1;
     for (const p of group.photos) {
+      aspect = Math.max(aspect, widthFactor(p.width, p.height));
       vFactor = Math.max(vFactor, heightFactor(p.width, p.height));
     }
-    blocks.push(packDay(group.photos.length, opennessFromExp(e), vFactor, cfg, geom));
+    blocks.push(packDay(group.photos.length, opennessFromExp(e), aspect, vFactor, cfg, geom));
   }
 
   /* The flattened walk over `days` is the single ordering authority for the
