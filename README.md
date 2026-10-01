@@ -14,13 +14,20 @@ drives its card size and how far forward it sits. The kernel's width adapts to
 the spacing between photo days, so dense clusters open up while long quiet
 stretches stay compact.
 
-Each day owns a block of cards standing on its own date. The block fans out
-sideways only as far as a budget allows — two card widths at minimum, a fraction
-of the plot and a hard number of days at most — and stacks upward for the rest,
-so a bump in the histogram grows a column right above it and no card ever drifts
-so far from its date that it reads as belonging to another one. Cards tilt a
-couple of degrees, deterministically, so a block looks like a deck thrown on a
-table rather than a grid.
+Each day owns a block of cards standing on its own date, and how open the day is
+decides what shape that block takes. A day far from the focus gets a narrow
+budget and tiles its cards on a square cell, so a distant cluster stays the thin
+column that echoes the histogram. A day near the focus is given up to
+`--tl-fan-open` of the plot, and its cells reserve each card's own box, so the
+photos open out across the table with none of them hiding another. The
+arrangement is chosen rather than assumed: every column count is tried and the
+one that makes the cards largest wins, which is also what keeps the block inside
+its budget.
+
+The looseness scales the same way. Cards lean up to twelve degrees and wander off
+their cell, both hashed from the photo's stable index so nothing twitches while
+the focus moves, and both capped so that no card can cover another card's centre
+— a centre is always there to click. Hovering lifts a card above its neighbours.
 
 You can drag anywhere in the stage, scroll, or use the arrow keys (`←` `→` for one
 day, `Page Up` / `Page Down` for a week, `Home` / `End` for the archive ends) to
@@ -30,8 +37,8 @@ press `Escape` to deselect. A light/dark toggle sits at the top right and is
 remembered between sessions.
 
 `npm test` checks the layout invariants: that a card belongs to its own date, that
-the drift and stacking stay inside their budgets, and that the layout is
-deterministic.
+no photo in an open day buries another, that every block fits the budget its
+openness allows, and that the layout is deterministic.
 
 ## Nothing leaves your machine
 
