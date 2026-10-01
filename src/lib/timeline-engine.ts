@@ -30,12 +30,13 @@ export const MAX_NUDGE_PX = 1.5;
 const MAX_COLS = 24;
 /* Jitter is what makes a block look thrown rather than laid out. It is capped
    at this fraction of the card size, and again at the slack the arrangement
-   left, so that together with the cell spacing the worst case is: two
-   neighbouring cards' centres stay further apart than half a card. Neither can
-   cover the other's centre — and the centre is what you click. */
+   left, and again at the gap that keeps neighbouring centres at least
+   MIN_CENTRE_GAP of a card apart. That last cap is the guarantee: within an
+   open day no card can cover another's centre — and the centre is what you
+   click. */
 const JITTER_RATIO = 0.22;
 const JITTER_Y_RATIO = 0.7;
-const MIN_CENTRE_GAP = 0.5;
+const MIN_CENTRE_GAP = 0.6;
 
 export interface CloudConfig {
   minSize: number;
@@ -215,13 +216,15 @@ function packDay(
   const pitch = size * cellW;
   const rowH = size * cellH;
 
-  /* The wobble may only use room the arrangement actually left: the slack
-     inside the block's budget, and — so that no two neighbours can close on
-     each other — half the cell spacing beyond their centres. The second cap is
-     what guarantees every card's centre stays reachable. */
+  /* The wobble may only spend room the arrangement actually left: the slack
+     inside the block's budget, and — so that neighbours cannot close on each
+     other — the gap that keeps them this far apart. That second cap is what
+     makes the block readable: no card can end up covering another card's
+     centre, and a centre is always there to click. */
   const slackX = (fan - ((cols - 1) * pitch + size * aspect)) / 2;
   const slackY = (availH - ((rows - 1) * rowH + size * vFactor)) / 2;
-  const gapRoom = (pitch - MIN_CENTRE_GAP * size) / 2;
+  const gapX = (pitch - MIN_CENTRE_GAP * aspect * size - 2 * MAX_NUDGE_PX) / 2;
+  const gapY = (rowH - MIN_CENTRE_GAP * vFactor * size) / 2;
 
   return {
     tn,
@@ -231,8 +234,8 @@ function packDay(
     rowH,
     spread,
     tilt: lerp(MAX_TILT_DEG, OPEN_TILT_DEG, spread),
-    jitterX: Math.max(0, Math.min(JITTER_RATIO * size, slackX, gapRoom)) * spread,
-    jitterY: Math.max(0, Math.min(JITTER_RATIO * size * JITTER_Y_RATIO, slackY, gapRoom)) * spread,
+    jitterX: Math.max(0, Math.min(JITTER_RATIO * size, slackX, gapX)) * spread,
+    jitterY: Math.max(0, Math.min(JITTER_RATIO * size * JITTER_Y_RATIO, slackY, gapY)) * spread,
   };
 }
 
