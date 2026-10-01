@@ -173,9 +173,14 @@ describe('computeLayout', () => {
     expect(layoutFor(BASE + 700)).toEqual(layoutFor(BASE + 700));
   });
 
-  it('tilt every card a little, and never too much', () => {
-    const tilts = layoutFor(BASE).map((l) => l.rot);
-    expect(Math.max(...tilts.map(Math.abs))).toBeLessThanOrEqual(2.001);
-    expect(new Set(tilts).size).toBeGreaterThan(1);
+  it('leans a card further the more open its day is', () => {
+    const closed = layoutFor(BASE + 2000).filter((l) => l.o < 0.01).map((l) => l.rot);
+    const open = layoutFor(BASE + 12).map((l) => l.rot);
+
+    expect(Math.max(...closed.map(Math.abs))).toBeLessThanOrEqual(2.001);
+    expect(Math.max(...open.map(Math.abs))).toBeLessThanOrEqual(12.001);
+    expect(Math.max(...open.map(Math.abs))).toBeGreaterThan(6);
+    /* still a spread of angles, not every card at the same lean */
+    expect(new Set(open.map((r) => r.toFixed(1))).size).toBeGreaterThan(5);
   });
 });

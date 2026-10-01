@@ -23,9 +23,19 @@ export const MIN_SHORT_EDGE_RATIO = 0.45;
 export const MAX_ASPECT_RATIO = 1 / MIN_SHORT_EDGE_RATIO;
 /** Enough to read as a tossed deck, little enough to keep the stack legible. */
 export const MAX_TILT_DEG = 2;
+/** An open day is cards on a table rather than a stack of cards. */
+export const OPEN_TILT_DEG = 12;
 export const MAX_NUDGE_PX = 1.5;
 /** Cap on the columns considered when choosing an arrangement. */
 const MAX_COLS = 24;
+/* Jitter is what makes a block look thrown rather than laid out. It is capped
+   at this fraction of the card size, and again at the slack the arrangement
+   left, so that together with the cell spacing the worst case is: two
+   neighbouring cards' centres stay further apart than half a card. Neither can
+   cover the other's centre — and the centre is what you click. */
+const JITTER_RATIO = 0.22;
+const JITTER_Y_RATIO = 0.7;
+const MIN_CENTRE_GAP = 0.5;
 
 export interface CloudConfig {
   minSize: number;
@@ -80,6 +90,10 @@ interface DayBlock {
   rowH: number;
   /** 0 closed, 1 fully open: how far the day has bloomed out of its column. */
   spread: number;
+  /** How far a card may lean, in degrees, and how far it may wander, in px. */
+  tilt: number;
+  jitterX: number;
+  jitterY: number;
 }
 
 /* Rows are ordered front to back within a day, so the layer stride has to be
@@ -197,7 +211,29 @@ function packDay(
     }
   }
 
-  return { tn, size, cols, pitch: size * cellW, rowH: size * cellH, spread };
+  const rows = Math.ceil(count / cols);
+  const pitch = size * cellW;
+  const rowH = size * cellH;
+
+  /* The wobble may only use room the arrangement actually left: the slack
+     inside the block's budget, and — so that no two neighbours can close on
+     each other — half the cell spacing beyond their centres. The second cap is
+     what guarantees every card's centre stays reachable. */
+  const slackX = (fan - ((cols - 1) * pitch + size * aspect)) / 2;
+  const slackY = (availH - ((rows - 1) * rowH + size * vFactor)) / 2;
+  const gapRoom = (pitch - MIN_CENTRE_GAP * size) / 2;
+
+  return {
+    tn,
+    size,
+    cols,
+    pitch,
+    rowH,
+    spread,
+    tilt: lerp(MAX_TILT_DEG, OPEN_TILT_DEG, spread),
+    jitterX: Math.max(0, Math.min(JITTER_RATIO * size, slackX, gapRoom)) * spread,
+    jitterY: Math.max(0, Math.min(JITTER_RATIO * size * JITTER_Y_RATIO, slackY, gapRoom)) * spread,
+  };
 }
 
 /** How wide a card of this aspect comes out relative to its scale. */
@@ -289,13 +325,17 @@ export function computeLayout(
       const row = Math.floor(k / block.cols);
 
       /* A deterministic per-photo wobble, so the block reads as a deck thrown
-         on a table. Keyed off the stable index, so a card never twitches while
-         the focus is animating. */
-      const wobble = pseudoRandom(photoIndex);
-      const nudge = (pseudoRandom(photoIndex + 0.5) - 0.5) * 2 * MAX_NUDGE_PX;
+         on a table rather than a grid. Keyed off the stable index, so a card
+         never twitches while the focus is animating, and scaled by how open the
+         day is: a closed day keeps the hairline nudge it has always had. */
+      const lean = (pseudoRandom(photoIndex) - 0.5) * 2 * block.tilt;
+      const wanderX = MAX_NUDGE_PX + block.jitterX;
+      const jitterX = (pseudoRandom(photoIndex + 0.5) - 0.5) * 2 * wanderX;
+      /* Upward only: a card on the ground can lift off it, never sink through. */
+      const jitterY = pseudoRandom(photoIndex + 0.25) * block.jitterY;
 
-      const x = dayX + dx + (col - (block.cols - 1) / 2) * block.pitch + nudge;
-      const y = baseline - row * block.rowH;
+      const x = dayX + dx + (col - (block.cols - 1) / 2) * block.pitch + jitterX;
+      const y = baseline - row * block.rowH - jitterY;
 
       const photo = group.photos[k];
       const aspect = photo && photo.width > 0 && photo.height > 0
@@ -366,7 +406,7 @@ export function computeLayout(
         day: group.day,
         groupIndex: gi,
         photoIndex: photoIndex++,
-        rot: (wobble - 0.5) * 2 * MAX_TILT_DEG,
+        rot: lean,
       });
     }
   }
