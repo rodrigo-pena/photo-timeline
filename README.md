@@ -1,6 +1,6 @@
 # Photo Timeline
 
-[![Netlify Status](https://api.netlify.com/api/v1/badges/d5622a93-dbdd-4531-9877-51655a63a592/deploy-status)](https://app.netlify.com/projects/coruscating-nasturtium-0b218b/deploys)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/d5622a93-dbdd-4531-9877-51655a63a592/deploy-status)](https://app.netlify.com/projects/rcgp-photo-timeline/deploys)
 
 A minimal, local-only photo timeline explorer. Load a folder of photos, and browse
 them in date order along an interactive timeline.
