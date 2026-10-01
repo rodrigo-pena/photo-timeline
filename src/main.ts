@@ -75,7 +75,7 @@ folderInput.addEventListener('change', () => {
 resetBtn.addEventListener('click', async () => {
   await clearPhotos();
   clearSkipped();
-  footStatus.textContent = 'Data privacy: nothing leaves your machine';
+  footStatus.textContent = 'Data privacy: your photos never leave your device';
   skipLink.textContent = 'Skip to the timeline →';
   resetBtn.hidden = true;
 });
