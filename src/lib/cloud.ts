@@ -135,8 +135,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   }
 
   function hitFromEvent(e: PointerEvent): number | null {
-    const rect = cloudEl.getBoundingClientRect();
-    return getElementAt(e.clientX - rect.left, e.clientY - rect.top);
+    return getElementAt(e.clientX, e.clientY);
   }
 
   let pointerDown = false;
@@ -153,26 +152,17 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     pointerDown = false;
   });
 
-  function getElementAt(x: number, y: number): number | null {
-    let bestIndex: number | null = null;
-    let bestZ = -1;
-
-    for (let i = 0; i < layouts.length; i++) {
-      const l = layouts[i];
-      const centerY = l.y - l.h / 2;
-      const padX = Math.max(26 - l.w / 2, 8);
-      const padY = Math.max(26 - l.h / 2, 8);
-
-      const withinX = Math.abs(x - l.x) <= l.w / 2 + padX;
-      const withinY = Math.abs(y - centerY) <= l.h / 2 + padY;
-
-      if (withinX && withinY && l.z > bestZ) {
-        bestZ = l.z;
-        bestIndex = i;
-      }
-    }
-
-    return bestIndex;
+  /* Let the browser answer "what is under the cursor". It already knows: the
+     cards are transformed and stacked, and while the cloud is animating to a
+     new focus they are somewhere between the old and the new layout, so a hit
+     test against the layout would pick a different photo than the one under
+     the pointer. */
+  function getElementAt(clientX: number, clientY: number): number | null {
+    const hit = document.elementFromPoint(clientX, clientY);
+    const thumb = hit ? hit.closest<HTMLElement>('.tl-thumb') : null;
+    if (!thumb) return null;
+    const index = Number(thumb.dataset.index);
+    return Number.isInteger(index) ? index : null;
   }
 
   /* Returns the photo that was selected, so callers never have to re-derive it

@@ -124,10 +124,7 @@ async function main(): Promise<void> {
       stage.removeEventListener('pointercancel', onUp);
 
       if (!dragging) {
-        const rect = cloud.getBoundingClientRect();
-        const x = ev.clientX - rect.left;
-        const y = ev.clientY - rect.top;
-        const idx = cloudRenderer.getElementAt(x, y);
+        const idx = cloudRenderer.getElementAt(ev.clientX, ev.clientY);
         const photo = idx === null ? null : cloudRenderer.select(idx);
         if (photo) {
           recordPanel.show(photo);
