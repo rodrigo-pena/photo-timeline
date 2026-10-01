@@ -169,6 +169,56 @@ describe('computeLayout', () => {
     expect(others(after)).toEqual(others(before));
   });
 
+  it('never lets one photo bury another photo in an open day', () => {
+    /* The guarantee behind being able to pick anything out of a focused day:
+       within an open block, no card's centre lies inside another card's box.
+       Closed days keep their old tight column and are exempt. */
+    const layouts = layoutFor(BASE + 12).filter((l) => l.o > 0.5);
+    expect(layouts.length).toBe(40);
+
+    for (const a of layouts) {
+      const acx = a.x;
+      const acy = a.y - a.h / 2;
+      for (const b of layouts) {
+        if (a === b) continue;
+        const bcy = b.y - b.h / 2;
+        const insideX = Math.abs(acx - b.x) < b.w / 2;
+        const insideY = Math.abs(acy - bcy) < b.h / 2;
+        expect(insideX && insideY).toBe(false);
+      }
+    }
+  });
+
+  it('lays a closed day out as the compact column it always was', () => {
+    const state = dataset(RUN);
+    /* a quiet day far from the focus: two columns on a square cell, at the
+       minimum card size */
+    const far = state.days[state.days.length - 1];
+    const cards = layoutFor(far.day - 2000).filter((l) => l.day === far.day);
+    expect(cards.length).toBe(2);
+    expect(cards[0].w).toBeCloseTo(CONFIG.minSize * 1.5, 0);
+    expect(new Set(cards.map((c) => c.x)).size).toBe(2);
+    expect(new Set(cards.map((c) => c.y)).size).toBe(1);
+  });
+
+  it('fits every block inside the budget its openness allows', () => {
+    const state = dataset(RUN);
+    for (const focus of [BASE, BASE + 12, BASE + 2000, BASE + 4600]) {
+      const layouts = layoutFor(focus);
+      const byDay = new Map<number, typeof layouts>();
+      for (const l of layouts) byDay.set(l.day, [...(byDay.get(l.day) ?? []), l]);
+
+      for (const [day, cards] of byDay) {
+        const budget = lerp(CONFIG.fanFrac, CONFIG.fanOpen, smoothstep(cards[0].o)) * span();
+        const width = Math.max(...cards.map((c) => c.x + c.w / 2)) - Math.min(...cards.map((c) => c.x - c.w / 2));
+        const height = Math.max(...cards.map((c) => c.y)) - Math.min(...cards.map((c) => c.y - c.h));
+        expect(width).toBeLessThanOrEqual(budget + cards[0].w * 2);
+        expect(height).toBeLessThanOrEqual(HEIGHT + 1);
+        expect(pixelAtDay(state, day, WIDTH) - budget / 2 - cards[0].w).toBeLessThan(span());
+      }
+    }
+  });
+
   it('is deterministic', () => {
     expect(layoutFor(BASE + 700)).toEqual(layoutFor(BASE + 700));
   });
