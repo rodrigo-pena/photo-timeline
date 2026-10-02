@@ -251,10 +251,44 @@ function heightFactor(width: number, height: number): number {
   return aspect >= 1 ? 1 : 1 / Math.sqrt(aspect);
 }
 
-/** Stable 0…1 from an index — no Math.random, so nothing shimmers per frame. */
-function pseudoRandom(seed: number): number {
+/* Exported so a test can assert a card's wobble against this closed form. The
+ * seed table in seedsFor is what removed ~2100 sin() calls per frame, and it is
+ * only trustworthy if it hands back exactly these numbers -- a mis-keyed cache
+ * produces angles that are still inside MAX_TILT and still deterministic, so
+ * nothing else in the suite would notice. See timeline-engine.cache.test.ts. */
+export function pseudoRandom(seed: number): number {
   const s = Math.sin(seed * 12.9898) * 43758.5453;
   return s - Math.floor(s);
+}
+
+/* The three wobble seeds per photo, precomputed.
+ *
+ * They depend only on a photo's flat index and never on the focus, so they are
+ * the same three numbers for the whole life of a dataset. Evaluating them in the
+ * per-photo loop meant three `Math.sin` calls for every photo on every frame,
+ * which at 700 photos is about 2,100 transcendental calls per frame to produce
+ * a table that never changes.
+ *
+ * Keyed on the days array, which is replaced only when the archive is regrouped
+ * -- so the cache lives exactly as long as the grouping it was built from and
+ * cannot outlive it. A test asserts the cached path matches recomputing them. */
+const jitterSeeds = new WeakMap<PhotoDay[], Float64Array>();
+
+function seedsFor(days: PhotoDay[]): Float64Array {
+  const cached = jitterSeeds.get(days);
+  if (cached) return cached;
+
+  let total = 0;
+  for (const day of days) total += day.photos.length;
+
+  const seeds = new Float64Array(total * 3);
+  for (let i = 0; i < total; i++) {
+    seeds[i * 3] = pseudoRandom(i);
+    seeds[i * 3 + 1] = pseudoRandom(i + 0.5);
+    seeds[i * 3 + 2] = pseudoRandom(i + 0.25);
+  }
+  jitterSeeds.set(days, seeds);
+  return seeds;
 }
 
 function smoothstep(t: number): number {
@@ -310,6 +344,7 @@ export function computeLayout(
      cloud: layout i belongs to the i-th photo of `days`, so a card's position
      and the photo drawn into it can never come from different arrays. */
   let photoIndex = 0;
+  const seeds = seedsFor(days);
   for (let gi = 0; gi < days.length; gi++) {
     const block = blocks[gi];
     const group = days[gi];
@@ -331,11 +366,12 @@ export function computeLayout(
          on a table rather than a grid. Keyed off the stable index, so a card
          never twitches while the focus is animating, and scaled by how open the
          day is: a closed day keeps the hairline nudge it has always had. */
-      const lean = (pseudoRandom(photoIndex) - 0.5) * 2 * block.tilt;
+      const seed = photoIndex * 3;
+      const lean = (seeds[seed] - 0.5) * 2 * block.tilt;
       const wanderX = MAX_NUDGE_PX + block.jitterX;
-      const jitterX = (pseudoRandom(photoIndex + 0.5) - 0.5) * 2 * wanderX;
+      const jitterX = (seeds[seed + 1] - 0.5) * 2 * wanderX;
       /* Upward only: a card on the ground can lift off it, never sink through. */
-      const jitterY = pseudoRandom(photoIndex + 0.25) * block.jitterY;
+      const jitterY = seeds[seed + 2] * block.jitterY;
 
       const x = dayX + dx + (col - (block.cols - 1) / 2) * block.pitch + jitterX;
       const y = baseline - row * block.rowH - jitterY;

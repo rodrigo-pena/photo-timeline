@@ -1,5 +1,7 @@
+import { putPhoto } from './db.js';
 import type { CloudConfig, EngineState, PhotoLayout } from './timeline-engine.js';
 import { computeLayout } from './timeline-engine.js';
+import { makePreview } from './thumbnail.js';
 import type { PhotoDay, PhotoRecord } from './types.js';
 
 export interface CloudRenderer {
@@ -44,6 +46,13 @@ function readConfig(el: HTMLElement): CloudConfig {
 export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   let photos: PhotoRecord[] = [];
   let objectUrls: string[] = [];
+  /* Preview URLs, by card index, so a card that has been sharpened once keeps
+     its own object URL and never leaks the previous one. Cleared with
+     `objectUrls` whenever the cards themselves are rebuilt. */
+  let previewUrls: (string | null)[] = [];
+  /** Previews being made right now, by photo id. Opening the same photo twice
+     *  while its first preview is still encoding must not start a second. */
+  const previewsInFlight = new Set<string>();
   let layouts: PhotoLayout[] = [];
   let elements: HTMLElement[] = [];
   let selectedIndex: number | null = null;
@@ -53,33 +62,107 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   let currentState: EngineState | null = null;
   let currentFocus = 0;
   let config = FALLBACK_CONFIG;
+  /* Whether `config` still reflects the cascade. `getComputedStyle` cannot be
+     asked once and remembered: it reports whatever the cascade says right now,
+     and the only things that can change those four custom properties are the
+     window width crossing the mobile breakpoint and a theme change. Reading it
+     every frame meant a forced style recalculation of the whole cloud, once per
+     frame, to recompute four numbers that never move. */
+  let configValid = false;
 
   function measure(): void {
     width = cloudEl.clientWidth;
     cloudHeight = cloudEl.clientHeight;
-    config = readConfig(cloudEl);
+    if (!configValid) {
+      config = readConfig(cloudEl);
+      configValid = true;
+    }
   }
 
   function buildElements(): void {
     for (const url of objectUrls) URL.revokeObjectURL(url);
+    for (const url of previewUrls) if (url) URL.revokeObjectURL(url);
     objectUrls = [];
+    previewUrls = [];
     cloudEl.innerHTML = '';
     elements = photos.map((photo, i) => {
       const el = document.createElement('div');
       el.className = 'tl-thumb';
       el.dataset.index = String(i);
 
-      const url = URL.createObjectURL(photo.blob);
+      /* The thumbnail when the archive has one, the original when it does not.
+         An archive imported before thumbnails existed has no `thumb` on any
+         record and simply draws its originals, exactly as it always did. */
+      const url = URL.createObjectURL(photo.thumb ?? photo.blob);
       objectUrls.push(url);
 
       const img = document.createElement('img');
       img.src = url;
       img.alt = photo.name;
       img.draggable = false;
+      /* Asynchronous decode, so a card never waits on the main thread for its
+         own pixels. `loading="lazy"` is deliberately not set: every card sits
+         inside the cloud by construction, so there is nothing off-screen for it
+         to defer, and it would only add a pop-in as cards scroll past. */
+      img.decoding = 'async';
       el.appendChild(img);
 
       cloudEl.appendChild(el);
+      previewUrls[i] = null;
       return el;
+    });
+  }
+
+  /* Sharpen the selected card.
+   *
+   * A thumbnail is sized for a 190px card, and the selected card fills the
+   * stage, so the thumbnail is stretched roughly three times and reads as soft
+   * -- the exact complaint the thumbnail was meant to answer, one scale down.
+   * The original is kept for this and nothing else, so the larger image is made
+   * here rather than for every photo at import.
+   *
+   * The card is shown with its thumbnail immediately and upgraded when the
+   * encode lands, so nothing ever opens blank. The preview is cached onto the
+   * record and written back, so the second visit to the same photo is free.
+   *
+   * There is deliberately no hover prefetch: a preview decode is ~3ms, so there
+   * is nothing to hide, and guessing from the pointer would start encodes for
+   * photos the user never opens.
+   */
+  function loadPreview(index: number, photo: PhotoRecord): void {
+    const img = elements[index]?.firstElementChild;
+    if (!(img instanceof HTMLImageElement)) return;
+
+    const apply = (blob: Blob): void => {
+      /* The cards may have been rebuilt by a reconcile toggle while the encode
+         was in flight, in which case this index is a different photo now. */
+      if (!elements[index] || photos[index]?.id !== photo.id) return;
+      const previous = previewUrls[index];
+      if (previous) URL.revokeObjectURL(previous);
+      const url = URL.createObjectURL(blob);
+      previewUrls[index] = url;
+      img.src = url;
+    };
+
+    if (photo.preview) {
+      if (previewUrls[index]) return;
+      apply(photo.preview);
+      return;
+    }
+
+    if (previewsInFlight.has(photo.id)) return;
+    previewsInFlight.add(photo.id);
+    void makePreview(photo.blob).then(async (preview) => {
+      previewsInFlight.delete(photo.id);
+      if (!preview) return;
+      photo.preview = preview;
+      apply(preview);
+      /* Best effort: a failed write only costs a second encode next time. */
+      try {
+        await putPhoto(photo);
+      } catch {
+        /* ignore */
+      }
     });
   }
 
@@ -129,16 +212,35 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     }
   }
 
-  function hitFromEvent(e: PointerEvent): number | null {
-    return getElementAt(e.clientX, e.clientY);
+  let pointerDown = false;
+
+  /* `elementFromPoint` is a hit test across every transformed and stacked
+     element in the document, and pointermove fires far faster than the display
+     can show: a 1000Hz mouse reports ten times per frame, a trackpad more. All
+     but the last of those answers were thrown away by setHover's early-out, so
+     the work was unbounded and the result never reached the screen.
+     Collapsing to one hit test per animation frame bounds it by the refresh
+     rate and, because the reading is taken during the same frame it is
+     painted, keeps the hover on the card the pointer is actually over. */
+  let hoverFrame = 0;
+  let pendingPointer: { x: number; y: number } | null = null;
+
+  function flushHover(): void {
+    hoverFrame = 0;
+    const pointer = pendingPointer;
+    pendingPointer = null;
+    if (pointer) setHover(getElementAt(pointer.x, pointer.y));
   }
 
-  let pointerDown = false;
   cloudEl.addEventListener('pointermove', (e: PointerEvent) => {
     if (pointerDown) return;
-    setHover(hitFromEvent(e));
+    pendingPointer = { x: e.clientX, y: e.clientY };
+    if (!hoverFrame) hoverFrame = requestAnimationFrame(flushHover);
   });
-  cloudEl.addEventListener('pointerleave', () => setHover(null));
+  cloudEl.addEventListener('pointerleave', () => {
+    pendingPointer = null;
+    setHover(null);
+  });
   cloudEl.addEventListener('pointerdown', () => {
     pointerDown = true;
     setHover(null);
@@ -169,6 +271,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     setHover(null);
     selectedIndex = index;
     elements[index].classList.add('is-sel');
+    loadPreview(index, photo);
     if (currentState) {
       render(currentState, currentFocus);
     }
@@ -187,6 +290,12 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   }
 
   function resize(): void {
+    /* A resize is the only thing that can change those four custom properties:
+       they are set in :root and overridden by the one `max-width: 760px` block,
+       and a viewport change always raises `resize`. The theme does not touch
+       them. So this is the whole invalidation story, and there is no media query
+       listener quietly covering for something else. */
+    configValid = false;
     measure();
     setHover(null);
   }

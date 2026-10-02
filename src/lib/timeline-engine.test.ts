@@ -1,3 +1,72 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   The layout's invariants.
+   ═══════════════════════════════════════════════════════════════════════
+
+   `computeLayout` has no single source of truth in the code. It is one walk over
+   two arrays at once -- the ordered days and the photos inside them -- and every
+   fact the cloud depends on falls out of that walk being done the same way
+   twice. So the properties below are not decoration around the layout, they
+   ARE the layout; a change that breaks one of them does not break a test, it
+   changes how the app looks, and often in a way that only shows up on somebody
+   else's photo library.
+
+   Three things make that easy to get wrong, and all three have been tempting at
+   some point:
+
+   1. Flattening `days` is the only ordering authority. Layout i is the i-th
+      photo of the flattened days, so a card's position and the photo drawn into
+      it can never come from different arrays. Any code that iterates `photos`
+      and `days` separately, or rebuilds one and not the other, breaks this
+      without any type error -- the shapes are identical.
+
+   2. `packDay` picks an arrangement by trying every column count, and the size
+      it returns comes from the cell rather than from a measurement pass. That is
+      what guarantees a block fits its budget in both directions without a second
+      look. Replacing it with "compute then check" reintroduces cards off their
+      own date.
+
+   3. The jitter is hashed from a photo's stable index, never from the focus or
+      from Math.random. That is the whole reason nothing twitches while the
+      timeline moves. `computeLayout` reads those seeds from a per-dataset cache
+      (seedsFor), so a cache keyed on anything other than the days array
+      identity will hand one archive another archive's wobble.
+
+   The tests, and what each one is protecting:
+
+     1. gives layout i the photo that flattened days put at i
+        invariant 1 above. A test that looks like a tautology.
+     2. keeps every card inside the cloud
+     3. keeps a card within its day block of its own date
+        invariant 2 above. This is the "photos stay on their date" guarantee.
+     4. does not scatter a dense day along the axis
+        a regression: forty photos once spread across the whole plot.
+     5. opens a focused day into a grid that fills its budget
+        an open day must read as cards on a table, not a column.
+     6. fits a day with more photos than the plot has rows
+        the degenerate case for invariant 2.
+     7. never lets a back row cover a front row, or one day cover a nearer day
+        z-order. Interacts with invariant 1; the two are not independent.
+     8. puts the selected card in the centre, on top, and does not move it
+        selection is a re-layout of one card, not of the cloud.
+     9. never lets one photo bury another photo in an open day
+        invariant 3. Closed days are exempt on purpose: that column is meant to
+        be dense. This is the guarantee behind being able to click anything.
+    10. lays a closed day out as the compact column it always was
+        a far-off day must still echo the histogram.
+    11. fits every block inside the budget its openness allows
+        invariant 2 again, from the other side.
+    12. is deterministic
+        invariant 3, and the cache in seedsFor.
+    13. leans a card further the more open its day is
+        the tilt is the visible signal of openness; flattening it to a constant
+        would pass every other test here.
+
+   Which are encoding-sensitive, meaning a "simplification" would look reasonable
+   and quietly redesign the app: 1, 3, 5, 7, 9 and 13. The rest would fail
+   loudly if broken. If one of those six is ever removed, it has to be replaced
+   with an equivalent, not deleted as redundant.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 import { describe, expect, it } from 'vitest';
 import type { CloudConfig, EngineState, PhotoLayout } from './timeline-engine.js';
 import { computeLayout, createEngine, pixelAtDay } from './timeline-engine.js';
@@ -234,4 +303,18 @@ describe('computeLayout', () => {
     /* still a spread of angles, not every card at the same lean */
     expect(new Set(open.map((r) => r.toFixed(1))).size).toBeGreaterThan(5);
   });
+
+  /* The wobble seeds are read from a per-dataset cache keyed on the days array
+     (seedsFor), which is what removed ~2100 sin() calls per frame. A cache
+     keyed on anything else would hand one archive another archive's wobble, and
+     nothing else here would notice: the positions are all still inside the
+     budget and the tilts are all still within range. */
+  it('gives the same cards the same wobble from a separately built dataset', () => {
+    /* Two datasets, same photos, same shape, but distinct array identities --
+       which is exactly what a reconcile toggle produces. */
+    const first = computeLayout(dataset(RUN), BASE + 12, WIDTH, HEIGHT, CONFIG, null, 1);
+    const second = computeLayout(dataset(RUN), BASE + 12, WIDTH, HEIGHT, CONFIG, null, 1);
+    expect(second).toEqual(first);
+  });
+
 });

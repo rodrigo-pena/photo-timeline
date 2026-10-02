@@ -88,18 +88,25 @@ npm install          # install dependencies
 npm run dev          # start the dev server (Vite, hot reload)
 npm run build        # type-check and build to dist/
 npm run preview      # serve the production build locally
-npm test             # run the layout invariant tests
+npm test             # run the tests
+npm run bench        # run the benchmarks
 ```
 
 The dev server prints a local URL. Open `http://localhost:5173/` to reach the upload
 screen, and `/timeline.html` for the timeline itself.
+
+### Benchmarks
+
+`npm run bench` covers the two pure passes: `computeLayout` at 320 / 700 / 2 000 /
+10 000 photos, and `reconcileDates` across the archive shapes that decide how
+expensive reconciliation is.
 
 ### Tech
 
 - **Vite + TypeScript**, no UI framework.
 - **exifr** for reading capture dates from photo EXIF metadata.
 - **IndexedDB** for local photo storage.
-- **Vitest** for the layout invariants.
+- **Vitest** for the tests and benchmarks.
 - `npx tsc` runs the type-check on its own (`npm run build` runs it as part of the
   build).
 
