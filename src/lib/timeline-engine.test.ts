@@ -30,6 +30,7 @@ function dataset(days: PhotoDay[]): EngineState {
     minDay: sorted[0].day,
     maxDay: sorted[sorted.length - 1].day,
     skippedCount: 0,
+    shiftedCount: 0,
   });
 }
 

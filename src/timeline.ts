@@ -7,16 +7,55 @@ import { createAxisRenderer } from './lib/axis.js';
 import { computeHistogram, renderHistogram } from './lib/histogram.js';
 import { initRecordPanel } from './lib/record-panel.js';
 import { getSkipped, clearSkipped } from './lib/skip-count.js';
+import { reconcileDates } from './lib/reconcile.js';
 
 initTheme();
 
 const DAY_MS = 86400000;
 
-function buildDataset(photos: PhotoRecord[], skippedCount: number): Dataset {
+/** The day the file itself was last written. Records stored before
+ *  `fileModifiedDay` existed still carry it: IndexedDB's structured clone
+ *  keeps a File's lastModified, so an archive imported earlier reconciles
+ *  without being re-imported. */
+function fileDayOf(photo: PhotoRecord): number | null {
+  if (typeof photo.fileModifiedDay === 'number') return photo.fileModifiedDay;
+  const ms = (photo.blob as Blob & { lastModified?: number }).lastModified;
+  return Number.isFinite(ms) && ms! > 0 ? Math.floor(ms! / DAY_MS) : null;
+}
+
+/** Moves any burst whose EXIF clock disagrees with its files, by whole days
+ *  and by the same amount for every photo in it, so the burst's own spacing
+ *  survives. Returns the photos in date order along with how many moved. */
+function applyShifts(photos: PhotoRecord[]): { photos: PhotoRecord[]; shiftedCount: number } {
   const sorted = [...photos].sort((a, b) => a.date - b.date);
+  const shifts = reconcileDates(sorted.map((p) => ({ exifDay: p.date, fileDay: fileDayOf(p) }))).map(
+    (r) => r.shiftDays,
+  );
+
+  let shiftedCount = 0;
+  const moved = sorted.map((p, i) => {
+    if (shifts[i] === 0) return p;
+    shiftedCount++;
+    return { ...p, date: p.date + shifts[i], shiftDays: shifts[i] };
+  });
+
+  /* Moving a burst reorders the archive, so the order has to be restored
+     before anything groups the photos into days. */
+  if (shiftedCount > 0) moved.sort((a, b) => a.date - b.date);
+  return { photos: moved, shiftedCount };
+}
+
+function buildDataset(
+  photos: PhotoRecord[],
+  skippedCount: number,
+  reconcile: boolean,
+): Dataset {
+  const { photos: dated, shiftedCount } = reconcile
+    ? applyShifts(photos)
+    : { photos: [...photos].sort((a, b) => a.date - b.date), shiftedCount: 0 };
 
   const dayMap = new Map<number, PhotoRecord[]>();
-  for (const p of sorted) {
+  for (const p of dated) {
     const list = dayMap.get(p.date) ?? [];
     list.push(p);
     dayMap.set(p.date, list);
@@ -29,7 +68,7 @@ function buildDataset(photos: PhotoRecord[], skippedCount: number): Dataset {
   const minDay = days.length > 0 ? days[0].day : 0;
   const maxDay = days.length > 0 ? days[days.length - 1].day : 0;
 
-  return { photos: sorted, days, minDay, maxDay, skippedCount };
+  return { photos: dated, days, minDay, maxDay, skippedCount, shiftedCount };
 }
 
 async function main(): Promise<void> {
@@ -40,7 +79,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const dataset = buildDataset(photos, getSkipped());
+  const dataset = buildDataset(photos, getSkipped(), true);
   const engine = createEngine(dataset);
 
   const stage = document.getElementById('tl-stage') as HTMLElement;
