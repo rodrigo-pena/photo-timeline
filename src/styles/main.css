@@ -206,7 +206,11 @@ b { font-weight: 500; }
 }
 .tl-foot a { border-bottom: 1px solid var(--border); padding-bottom: 1px; }
 .tl-foot a:hover { color: var(--fg); border-color: var(--fg); }
-.tl-foot-links { display: inline-flex; align-items: baseline; gap: 12px; }
+/* The footer's links are separated by the same dot the status line uses
+   between its own parts, so the right of the footer reads as one line rather
+   than a caption followed by two buttons. In normal flow rather than a flex
+   gap, so the dot is a character in the sentence and wraps with it. */
+.tl-foot-sep { color: color-mix(in oklab, var(--muted) 60%, transparent); }
 
 /* ═══ SCREEN 1 · landing / upload ══════════════════════════════════ */
 .tl-empty {

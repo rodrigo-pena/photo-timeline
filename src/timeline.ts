@@ -87,6 +87,7 @@ async function main(): Promise<void> {
   const datasetLabel = document.getElementById('tl-dataset') as HTMLElement;
   const footStatus = document.getElementById('tl-foot-status') as HTMLElement;
   const reconcileLink = document.getElementById('tl-reconcile') as HTMLAnchorElement;
+  const reconcileSep = document.getElementById('tl-reconcile-sep') as HTMLElement;
   const resetLink = document.getElementById('tl-reset') as HTMLAnchorElement;
 
   const cloudRenderer = createCloudRenderer(cloud);
@@ -140,6 +141,8 @@ async function main(): Promise<void> {
        the footer's one chance to explain itself, and it costs no chrome. */
     const offered = reconcile ? dataset.shiftedCount : reconcileAvailable;
     reconcileLink.hidden = offered === 0;
+    /* The dot belongs to the link, so hiding one has to hide the other. */
+    reconcileSep.hidden = reconcileLink.hidden;
     reconcileLink.textContent = reconcile ? 'use camera dates' : 'use corrected dates';
     reconcileLink.title = reconcile
       ? 'Show the dates your camera recorded, uncorrected'
