@@ -130,7 +130,7 @@ async function main(): Promise<void> {
 
     const parts = [`${photos.length} photos`];
     if (dataset.shiftedCount > 0) parts.push(`${dataset.shiftedCount} dates corrected`);
-    if (dataset.skippedCount > 0) parts.push(`${dataset.skippedCount} skipped (no EXIF date)`);
+    if (dataset.skippedCount > 0) parts.push(`${dataset.skippedCount} skipped (no camera date)`);
     parts.push('local only');
     footStatus.textContent = parts.join(' · ');
 
