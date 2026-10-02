@@ -129,14 +129,21 @@ async function main(): Promise<void> {
     datasetLabel.textContent = `${photos.length} records · ${y0}–${y1}`;
 
     const parts = [`${photos.length} photos`];
-    if (dataset.shiftedCount > 0) parts.push(`${dataset.shiftedCount} reconciled`);
+    if (dataset.shiftedCount > 0) parts.push(`${dataset.shiftedCount} dates corrected`);
     if (dataset.skippedCount > 0) parts.push(`${dataset.skippedCount} skipped (no EXIF date)`);
     parts.push('local only');
     footStatus.textContent = parts.join(' · ');
 
+    /* Both halves name which dates are being trusted, in the same shape, so
+       which way the toggle goes reads off the label without a legend. The
+       title carries the consequence for anyone who hovers and wonders —
+       the footer's one chance to explain itself, and it costs no chrome. */
     const offered = reconcile ? dataset.shiftedCount : reconcileAvailable;
     reconcileLink.hidden = offered === 0;
-    reconcileLink.textContent = reconcile ? 'raw EXIF' : 'reconciled';
+    reconcileLink.textContent = reconcile ? 'use camera dates' : 'use corrected dates';
+    reconcileLink.title = reconcile
+      ? 'Show the dates your camera recorded, uncorrected'
+      : "Move photos whose file date disagrees with your camera's";
   }
 
   /** Repoints every renderer at the current dataset. The photo order can change

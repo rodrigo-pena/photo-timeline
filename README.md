@@ -61,8 +61,8 @@ about itself, and when the gap is longer than any shoot-to-export workflow
 plausibly takes. Every one of those has to hold, and when any of them does not,
 nothing is touched.
 
-The footer says how many photos were moved, the record panel names the date each
-one was moved off, and a `raw EXIF` link beside `reset` puts them all back. The
+The footer says how many dates were corrected, the record panel names the date each
+one was moved off, and a `use camera dates` link beside `reset` puts them all back. The
 day a photo lands on is the file's own date rather than the shutter's, so this
 corrects the year rather than the day.
 
