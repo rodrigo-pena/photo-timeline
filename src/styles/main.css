@@ -206,6 +206,7 @@ b { font-weight: 500; }
 }
 .tl-foot a { border-bottom: 1px solid var(--border); padding-bottom: 1px; }
 .tl-foot a:hover { color: var(--fg); border-color: var(--fg); }
+.tl-foot-links { display: inline-flex; align-items: baseline; gap: 12px; }
 
 /* ═══ SCREEN 1 · landing / upload ══════════════════════════════════ */
 .tl-empty {

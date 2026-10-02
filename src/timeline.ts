@@ -2,6 +2,7 @@ import { initTheme } from './lib/theme.js';
 import { getAllPhotos, clearPhotos } from './lib/db.js';
 import type { Dataset, PhotoDay, PhotoRecord } from './lib/types.js';
 import { createEngine } from './lib/timeline-engine.js';
+import type { EngineState } from './lib/timeline-engine.js';
 import { createCloudRenderer } from './lib/cloud.js';
 import { createAxisRenderer } from './lib/axis.js';
 import { computeHistogram, renderHistogram } from './lib/histogram.js';
@@ -79,33 +80,76 @@ async function main(): Promise<void> {
     return;
   }
 
-  const dataset = buildDataset(photos, getSkipped(), true);
-  const engine = createEngine(dataset);
-
   const stage = document.getElementById('tl-stage') as HTMLElement;
   const cloud = document.getElementById('tl-cloud') as HTMLElement;
   const plot = document.getElementById('tl-plot') as HTMLElement;
   const scale = document.getElementById('tl-scale') as HTMLElement;
   const datasetLabel = document.getElementById('tl-dataset') as HTMLElement;
   const footStatus = document.getElementById('tl-foot-status') as HTMLElement;
+  const reconcileLink = document.getElementById('tl-reconcile') as HTMLAnchorElement;
   const resetLink = document.getElementById('tl-reset') as HTMLAnchorElement;
 
   const cloudRenderer = createCloudRenderer(cloud);
-  const axisRenderer = createAxisRenderer(plot, scale, engine);
   const recordPanel = initRecordPanel();
 
-  cloudRenderer.updatePhotos(dataset.days);
+  let reconcile = true;
+  /* All three are (re)built by loadDataset, which runs before anything reads
+     them and again on every toggle. */
+  let dataset!: Dataset;
+  let engine!: EngineState;
+  let histData!: ReturnType<typeof computeHistogram>;
+  /* Whether reconciliation finds anything is a property of the archive, not of
+     the toggle, so it is measured once and the control is offered only when it
+     would actually change something. */
+  let reconcileAvailable = 0;
 
-  const y0 = new Date(dataset.minDay * DAY_MS).getUTCFullYear();
-  const y1 = new Date(dataset.maxDay * DAY_MS).getUTCFullYear();
-  datasetLabel.textContent = `${photos.length} records · ${y0}–${y1}`;
-  footStatus.textContent = dataset.skippedCount > 0
-    ? `${photos.length} photos · ${dataset.skippedCount} skipped (no EXIF date) · local only`
-    : `${photos.length} photos · local only`;
+  loadDataset();
 
-  const histData = computeHistogram(dataset.days, engine.minDay, engine.numDays);
+  const axisRenderer = createAxisRenderer(plot, scale, engine);
   const svg = plot.querySelector('svg')!;
-  renderHistogram(svg, histData, plot.clientWidth, plot.clientHeight);
+
+  function loadDataset(previousFocus?: number): void {
+    dataset = buildDataset(photos, getSkipped(), reconcile);
+    engine = createEngine(dataset);
+    histData = computeHistogram(dataset.days, engine.minDay, engine.numDays);
+
+    /* Toggling should not throw away where the user was looking. A focus that
+       no longer exists — because the photos moved out from under it — falls back
+       to the nearest end of the archive that does. */
+    if (previousFocus !== undefined) {
+      engine.focus = Math.max(engine.minDay, Math.min(engine.maxDay, previousFocus));
+      engine.target = engine.focus;
+    }
+    if (reconcile) reconcileAvailable = Math.max(reconcileAvailable, dataset.shiftedCount);
+  }
+
+  function updateChrome(): void {
+    const y0 = new Date(dataset.minDay * DAY_MS).getUTCFullYear();
+    const y1 = new Date(dataset.maxDay * DAY_MS).getUTCFullYear();
+    datasetLabel.textContent = `${photos.length} records · ${y0}–${y1}`;
+
+    const parts = [`${photos.length} photos`];
+    if (dataset.shiftedCount > 0) parts.push(`${dataset.shiftedCount} reconciled`);
+    if (dataset.skippedCount > 0) parts.push(`${dataset.skippedCount} skipped (no EXIF date)`);
+    parts.push('local only');
+    footStatus.textContent = parts.join(' · ');
+
+    const offered = reconcile ? dataset.shiftedCount : reconcileAvailable;
+    reconcileLink.hidden = offered === 0;
+    reconcileLink.textContent = reconcile ? 'raw EXIF' : 'reconciled';
+  }
+
+  /** Repoints every renderer at the current dataset. The photo order can change
+   *  under a toggle, so the cloud's cards are rebuilt rather than repositioned:
+   *  a card's index is what maps it to a photo. */
+  function showDataset(previousFocus?: number): void {
+    loadDataset(previousFocus);
+    axisRenderer.setState(engine);
+    cloudRenderer.updatePhotos(dataset.days);
+    renderHistogram(svg, histData, plot.clientWidth, plot.clientHeight);
+    updateChrome();
+    kick();
+  }
 
   let raf = 0;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -214,6 +258,17 @@ async function main(): Promise<void> {
     axisRenderer.render(engine, engine.focus);
   });
 
+  reconcileLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    /* A selected photo belongs to the dataset being shown, and rebuilding the
+       cloud replaces every card, so the selection goes with it. */
+    cloudRenderer.deselect();
+    recordPanel.close();
+    const previousFocus = engine.focus;
+    reconcile = !reconcile;
+    showDataset(previousFocus);
+  });
+
   resetLink.addEventListener('click', async (e) => {
     e.preventDefault();
     await clearPhotos();
@@ -221,8 +276,7 @@ async function main(): Promise<void> {
     window.location.href = 'index.html';
   });
 
-  cloudRenderer.render(engine, engine.focus);
-  axisRenderer.render(engine, engine.focus);
+  showDataset();
 }
 
 main();
