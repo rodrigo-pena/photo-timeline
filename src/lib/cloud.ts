@@ -212,16 +212,35 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     }
   }
 
-  function hitFromEvent(e: PointerEvent): number | null {
-    return getElementAt(e.clientX, e.clientY);
+  let pointerDown = false;
+
+  /* `elementFromPoint` is a hit test across every transformed and stacked
+     element in the document, and pointermove fires far faster than the display
+     can show: a 1000Hz mouse reports ten times per frame, a trackpad more. All
+     but the last of those answers were thrown away by setHover's early-out, so
+     the work was unbounded and the result never reached the screen.
+     Collapsing to one hit test per animation frame bounds it by the refresh
+     rate and, because the reading is taken during the same frame it is
+     painted, keeps the hover on the card the pointer is actually over. */
+  let hoverFrame = 0;
+  let pendingPointer: { x: number; y: number } | null = null;
+
+  function flushHover(): void {
+    hoverFrame = 0;
+    const pointer = pendingPointer;
+    pendingPointer = null;
+    if (pointer) setHover(getElementAt(pointer.x, pointer.y));
   }
 
-  let pointerDown = false;
   cloudEl.addEventListener('pointermove', (e: PointerEvent) => {
     if (pointerDown) return;
-    setHover(hitFromEvent(e));
+    pendingPointer = { x: e.clientX, y: e.clientY };
+    if (!hoverFrame) hoverFrame = requestAnimationFrame(flushHover);
   });
-  cloudEl.addEventListener('pointerleave', () => setHover(null));
+  cloudEl.addEventListener('pointerleave', () => {
+    pendingPointer = null;
+    setHover(null);
+  });
   cloudEl.addEventListener('pointerdown', () => {
     pointerDown = true;
     setHover(null);
