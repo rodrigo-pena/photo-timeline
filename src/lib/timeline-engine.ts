@@ -251,8 +251,12 @@ function heightFactor(width: number, height: number): number {
   return aspect >= 1 ? 1 : 1 / Math.sqrt(aspect);
 }
 
-/** Stable 0…1 from an index — no Math.random, so nothing shimmers per frame. */
-function pseudoRandom(seed: number): number {
+/* Exported so a test can assert a card's wobble against this closed form. The
+ * seed table in seedsFor is what removed ~2100 sin() calls per frame, and it is
+ * only trustworthy if it hands back exactly these numbers -- a mis-keyed cache
+ * produces angles that are still inside MAX_TILT and still deterministic, so
+ * nothing else in the suite would notice. See timeline-engine.cache.test.ts. */
+export function pseudoRandom(seed: number): number {
   const s = Math.sin(seed * 12.9898) * 43758.5453;
   return s - Math.floor(s);
 }
