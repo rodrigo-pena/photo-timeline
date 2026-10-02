@@ -6,10 +6,15 @@ const DAY_MS = 86400000;
 
 export interface AxisRenderer {
   render(state: EngineState, focus: number): void;
+  /** Points the renderer at a different archive. Reconciliation can move the
+   *  first and last photo, so the run of ticks has to be built for whatever
+   *  range it is now being asked to draw. */
+  setState(state: EngineState): void;
   resize(): void;
 }
 
-export function createAxisRenderer(plotEl: HTMLElement, scaleEl: HTMLElement, state: EngineState): AxisRenderer {
+export function createAxisRenderer(plotEl: HTMLElement, scaleEl: HTMLElement, initial: EngineState): AxisRenderer {
+  let state = initial;
   let width = 0;
   let dotEl: HTMLElement | null = null;
   let pillEl: HTMLElement | null = null;
@@ -101,9 +106,14 @@ export function createAxisRenderer(plotEl: HTMLElement, scaleEl: HTMLElement, st
     }
   }
 
+  function setState(next: EngineState): void {
+    state = next;
+    build();
+  }
+
   function resize(): void {
     width = plotEl.clientWidth;
   }
 
-  return { render, resize };
+  return { render, setState, resize };
 }

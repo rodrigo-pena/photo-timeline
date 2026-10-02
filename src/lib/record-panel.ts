@@ -10,6 +10,11 @@ export interface RecordPanel {
   toggle(): void;
 }
 
+function formatDay(day: number): string {
+  const date = new Date(day * DAY_MS);
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
 export function initRecordPanel(): RecordPanel {
   const info = document.getElementById('tl-info')!;
   const tab = document.getElementById('tl-info-tab') as HTMLButtonElement;
@@ -29,14 +34,21 @@ export function initRecordPanel(): RecordPanel {
   }
 
   function show(photo: PhotoRecord): void {
-    const date = new Date(photo.date * DAY_MS);
-    const dateStr = `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+    const shiftDays = photo.shiftDays ?? 0;
 
     const fields: [string, string][] = [
-      ['Date', dateStr],
+      ['Date', formatDay(photo.date)],
       ['File', photo.name],
       ['Size', photo.width && photo.height ? `${photo.width} × ${photo.height}` : '—'],
     ];
+
+    /* A reconciled date is a correction, not a capture time, and naming the
+       date it was moved off is what keeps the panel from passing it off as
+       one. It sits with the other fields rather than as a note underneath, so
+       it reads as part of the record. */
+    if (shiftDays !== 0) {
+      fields.splice(1, 0, ['Was', formatDay(photo.date - shiftDays)]);
+    }
 
     if (photo.camera) fields.push(['Camera', photo.camera]);
     if (photo.lens) fields.push(['Lens', photo.lens]);

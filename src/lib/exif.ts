@@ -27,8 +27,11 @@ export async function processFiles(files: File[]): Promise<ProcessResult> {
         ?? data?.ModifyDate?.getTime();
 
       /* Only EXIF counts as a capture date. The file's own mtime is not a
-         capture date — copying, syncing and exporting all rewrite it — so a
-         photo without a usable EXIF date is skipped rather than misdated. */
+         capture date — copying, syncing and exporting all rewrite it — so it
+         never decides where a photo sits, and a photo without a usable EXIF
+         date is skipped rather than misdated. It is still kept, as the one
+         timestamp no export rewrites: where EXIF is wrong, it is the only
+         thing left that disagrees, and that disagreement is worth having. */
       if (dateMs === undefined || !Number.isFinite(dateMs)) {
         skippedCount++;
         continue;
@@ -43,6 +46,7 @@ export async function processFiles(files: File[]): Promise<ProcessResult> {
         blob: file,
         name: file.name,
         date: day,
+        fileModifiedDay: fileDay(file.lastModified),
         width: dims.width,
         height: dims.height,
         camera: data?.Make && data?.Model ? `${data.Make} ${data.Model}` : undefined,
@@ -60,6 +64,12 @@ export async function processFiles(files: File[]): Promise<ProcessResult> {
   }
 
   return { photos, skippedCount };
+}
+
+/** The file's own date as a day number, or undefined when the browser gave
+ *  us nothing usable. Epoch 0 is not a file date any real photo has. */
+function fileDay(ms: number): number | undefined {
+  return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / DAY_MS) : undefined;
 }
 
 function getImageDimensions(file: File): Promise<{ width: number; height: number }> {

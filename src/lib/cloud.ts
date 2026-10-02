@@ -69,11 +69,6 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
       el.className = 'tl-thumb';
       el.dataset.index = String(i);
 
-      const chip = document.createElement('div');
-      chip.className = 'tl-chip';
-      chip.textContent = formatDate(photo.date);
-      el.appendChild(chip);
-
       const url = URL.createObjectURL(photo.blob);
       objectUrls.push(url);
 
@@ -200,12 +195,6 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     photos = days.flatMap((day) => day.photos);
     hoverIndex = null;
     buildElements();
-  }
-
-  function formatDate(day: number): string {
-    const d = new Date(day * 86400000);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
   }
 
   return { render, getElementAt, select, deselect, resize, updatePhotos };

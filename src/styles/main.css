@@ -206,6 +206,11 @@ b { font-weight: 500; }
 }
 .tl-foot a { border-bottom: 1px solid var(--border); padding-bottom: 1px; }
 .tl-foot a:hover { color: var(--fg); border-color: var(--fg); }
+/* The footer's links are separated by the same dot the status line uses
+   between its own parts, so the right of the footer reads as one line rather
+   than a caption followed by two buttons. In normal flow rather than a flex
+   gap, so the dot is a character in the sentence and wraps with it. */
+.tl-foot-sep { color: color-mix(in oklab, var(--muted) 60%, transparent); }
 
 /* ═══ SCREEN 1 · landing / upload ══════════════════════════════════ */
 .tl-empty {
@@ -255,15 +260,7 @@ b { font-weight: 500; }
 }
 .tl-thumb img { width: 100%; height: 100%; object-fit: contain; }
 .tl-thumb.is-sel { outline: 2px solid var(--signal); outline-offset: 2px; }
-.tl-thumb.is-sel .tl-chip { display: none; }
 .tl-thumb.is-hover { box-shadow: 0 10px 28px color-mix(in oklab, var(--fg) 22%, transparent); }
-.tl-chip {
-  position: absolute; left: 8px; bottom: 8px; padding: 2px 6px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  box-shadow: var(--elev-raised);
-  font-family: var(--font-mono); font-size: 10px; line-height: 1.5; color: var(--muted);
-  white-space: nowrap; opacity: calc((var(--o) - 0.5) * 4);
-}
 .tl-xhair { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: color-mix(in oklch, var(--signal) 24%, transparent); pointer-events: none; z-index: 1; }
 
 /* ── plot: one smooth grey histogram sitting on the axis ──────────── */
