@@ -5,6 +5,16 @@ export interface PhotoRecord {
   date: number;
   width: number;
   height: number;
+  /** A downscaled JPEG for the cloud to draw, made once at import.
+   *
+   *  Absent on records written before thumbnails existed, and absent whenever
+   *  the browser could not decode the original — in both cases `blob` is drawn
+   *  instead. Nothing reads this field without a fallback, so an old archive
+   *  keeps working and needs no migration; it is only slower. */
+  thumb?: Blob;
+  /** A larger JPEG for the selected card, made on demand the first time a photo
+   *  is opened and then written back. Absent until then. */
+  preview?: Blob;
   /** The day the file itself was last written, as `date` is a day number.
    *  Never a capture date — kept as the one timestamp no export rewrites,
    *  which is what says so when EXIF is wrong. Absent on records written

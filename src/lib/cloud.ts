@@ -69,13 +69,21 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
       el.className = 'tl-thumb';
       el.dataset.index = String(i);
 
-      const url = URL.createObjectURL(photo.blob);
+      /* The thumbnail when the archive has one, the original when it does not.
+         An archive imported before thumbnails existed has no `thumb` on any
+         record and simply draws its originals, exactly as it always did. */
+      const url = URL.createObjectURL(photo.thumb ?? photo.blob);
       objectUrls.push(url);
 
       const img = document.createElement('img');
       img.src = url;
       img.alt = photo.name;
       img.draggable = false;
+      /* Asynchronous decode, so a card never waits on the main thread for its
+         own pixels. `loading="lazy"` is deliberately not set: every card sits
+         inside the cloud by construction, so there is nothing off-screen for it
+         to defer, and it would only add a pop-in as cards scroll past. */
+      img.decoding = 'async';
       el.appendChild(img);
 
       cloudEl.appendChild(el);

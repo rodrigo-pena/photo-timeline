@@ -1,5 +1,6 @@
 import exifr from 'exifr';
 import type { PhotoRecord } from './types.js';
+import { makeThumbnail } from './thumbnail.js';
 
 const DAY_MS = 86400000;
 
@@ -39,7 +40,11 @@ export async function processFiles(files: File[]): Promise<ProcessResult> {
 
       const day = Math.floor(dateMs / DAY_MS);
 
-      const dims = await getImageDimensions(file);
+      /* One decode does double duty: the native dimensions the layout needs,
+         and the thumbnail the cloud will actually draw. It used to be a bare
+         `new Image()` purely to read naturalWidth, which threw away a full
+         decode of a multi-megabyte original on every photo. */
+      const image = await makeThumbnail(file);
 
       const photo: PhotoRecord = {
         id: crypto.randomUUID(),
@@ -47,8 +52,9 @@ export async function processFiles(files: File[]): Promise<ProcessResult> {
         name: file.name,
         date: day,
         fileModifiedDay: fileDay(file.lastModified),
-        width: dims.width,
-        height: dims.height,
+        width: image.width,
+        height: image.height,
+        thumb: image.thumb ?? undefined,
         camera: data?.Make && data?.Model ? `${data.Make} ${data.Model}` : undefined,
         lens: data?.LensModel,
         exposure: data?.ExposureTime ? `1/${Math.round(1 / data.ExposureTime)}s` : undefined,
@@ -70,20 +76,4 @@ export async function processFiles(files: File[]): Promise<ProcessResult> {
  *  us nothing usable. Epoch 0 is not a file date any real photo has. */
 function fileDay(ms: number): number | undefined {
   return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / DAY_MS) : undefined;
-}
-
-function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: 0, height: 0 });
-    };
-    img.src = url;
-  });
 }

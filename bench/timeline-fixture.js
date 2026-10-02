@@ -79,7 +79,21 @@
       }
 
       const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
-      pool.push({ blob, w, h });
+
+      /* The same 480px thumbnail the import pipeline writes, so the fixture
+         measures the timeline the app actually builds rather than one still
+         drawing full-resolution originals. */
+      const t = document.createElement('canvas');
+      const long = Math.max(w, h);
+      const s = long > 480 ? 480 / long : 1;
+      t.width = Math.max(1, Math.round(w * s));
+      t.height = Math.max(1, Math.round(h * s));
+      t.getContext('2d').drawImage(canvas, 0, 0, t.width, t.height);
+      const thumb = await new Promise((res) => t.toBlob(res, 'image/jpeg', 0.72));
+      t.width = 1;
+      t.height = 1;
+
+      pool.push({ blob, thumb, w, h });
       /* Drop the backing store immediately: 24 live 4000x3000 canvases is
          ~1GB of RGBA and Chrome will start evicting the wrong things. */
       canvas.width = 1;
@@ -113,6 +127,7 @@
         records.push({
           id: `p${made}`,
           blob: img.blob,
+          thumb: img.thumb,
           name: `IMG_${String(made).padStart(5, '0')}.jpg`,
           date: day,
           fileModifiedDay: day,
@@ -131,7 +146,11 @@
   const t_start = performance.now();
   const ready = makePool().then((pool) => {
     store = buildRecords(pool);
-    window.__BENCH_READY__ = { count: store.length, blobBytes: store.reduce((a, r) => a + (r.blob.size || 0), 0) };
+    window.__BENCH_READY__ = {
+      count: store.length,
+      blobBytes: store.reduce((a, r) => a + (r.blob.size || 0), 0),
+      thumbBytes: store.reduce((a, r) => a + (r.thumb ? r.thumb.size : 0), 0),
+    };
   });
 
   /* Load-phase timeline. The jank people report is mostly not steady-state
