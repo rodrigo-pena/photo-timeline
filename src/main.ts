@@ -24,10 +24,27 @@ async function handleFiles(files: FileList | File[]): Promise<void> {
   processing = true;
   errEl.hidden = true;
   statusEl.hidden = false;
-  statusEl.textContent = `Processing ${files.length} files…`;
+
+  const total = files.length;
+  let lastPaint = 0;
+  /* An import of 700 photos takes seconds, and the screen used to say
+     "Processing 700 files…" and then nothing at all until it finished, which
+     reads as a hang. The text is repainted at most every 100ms: progress that
+     updates faster than the eye can follow is just extra layout on the main
+     thread while the decoder is competing for it. */
+  const showProgress = (done: number): void => {
+    const now = performance.now();
+    if (done < total && now - lastPaint < 100) return;
+    lastPaint = now;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 100;
+    statusEl.textContent = done >= total
+      ? `Reading ${total} files…`
+      : `Reading ${done} of ${total} files… ${pct}%`;
+  };
+  showProgress(0);
 
   try {
-    const { photos, skippedCount } = await processFiles(Array.from(files));
+    const { photos, skippedCount } = await processFiles(Array.from(files), showProgress);
 
     if (photos.length === 0) {
       addSkipped(skippedCount);
