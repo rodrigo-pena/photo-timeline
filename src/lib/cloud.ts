@@ -62,11 +62,21 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   let currentState: EngineState | null = null;
   let currentFocus = 0;
   let config = FALLBACK_CONFIG;
+  /* Whether `config` still reflects the cascade. `getComputedStyle` cannot be
+     asked once and remembered: it reports whatever the cascade says right now,
+     and the only things that can change those four custom properties are the
+     window width crossing the mobile breakpoint and a theme change. Reading it
+     every frame meant a forced style recalculation of the whole cloud, once per
+     frame, to recompute four numbers that never move. */
+  let configValid = false;
 
   function measure(): void {
     width = cloudEl.clientWidth;
     cloudHeight = cloudEl.clientHeight;
-    config = readConfig(cloudEl);
+    if (!configValid) {
+      config = readConfig(cloudEl);
+      configValid = true;
+    }
   }
 
   function buildElements(): void {
@@ -261,6 +271,12 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   }
 
   function resize(): void {
+    /* A resize is the only thing that can change those four custom properties:
+       they are set in :root and overridden by the one `max-width: 760px` block,
+       and a viewport change always raises `resize`. The theme does not touch
+       them. So this is the whole invalidation story, and there is no media query
+       listener quietly covering for something else. */
+    configValid = false;
     measure();
     setHover(null);
   }
