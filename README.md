@@ -35,6 +35,37 @@ the centre while the record panel shows its metadata. Click the background or
 press `Escape` to deselect. A light/dark toggle sits at the top right and is
 remembered between sessions.
 
+## Dates
+
+A camera whose clock was never reset dates an entire shoot to the wrong year, and
+the photos are otherwise perfectly good. Nothing in the metadata admits it: the
+capture date, the create date and the modify date all carry the same wrong value,
+because the editor that wrote the file preserved the capture date verbatim. The
+file's own date is the one timestamp no export rewrites, so it is the only thing
+left that disagrees — and it is kept alongside the EXIF date for exactly that
+reason. It never decides where a photo sits; a photo with no usable EXIF date is
+still skipped rather than misdated.
+
+When a file date contradicts EXIF by years, the whole run of photos moves by one
+offset rather than each photo taking its own file date. A mis-set clock is still
+running — it reports plausible times of day and advances correctly — so a
+shoot's spacing within itself is good and only its epoch is wrong. Shifting by
+whole days keeps that spacing, where re-dating each photo would flatten an
+occasion into a single spike.
+
+Because copying and syncing a folder rewrite every file's date to the moment of
+the copy, a large share of a library often carries one file date that says nothing
+at all. So a run only moves when its file dates agree with each other and are not
+the date the rest of the archive shares, when it is big enough to be evidence
+about itself, and when the gap is longer than any shoot-to-export workflow
+plausibly takes. Every one of those has to hold, and when any of them does not,
+nothing is touched.
+
+The footer says how many photos were moved, the record panel names the date each
+one was moved off, and a `raw EXIF` link beside `reset` puts them all back. The
+day a photo lands on is the file's own date rather than the shutter's, so this
+corrects the year rather than the day.
+
 ## Nothing leaves your machine
 
 Photos are read in the browser and stored in **IndexedDB** on your own device. There
