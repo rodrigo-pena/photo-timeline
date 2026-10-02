@@ -53,19 +53,22 @@ export function detectBursts(days: number[], gap: number = BURST_GAP_DAYS): Burs
   return bursts;
 }
 
-/**
- * The one file date covering more than `share` of the given file dates, or
- * null when no date does. Photos with no file date are left out of both the
- * tally and the total, so an archive of mostly-dateless photos cannot invent a
- * dominant date out of the one file that has one.
- *
- * This is the single most important guard here. Copying or syncing a folder
- * rewrites every file's date to the moment of the copy, so in a library that
- * has been copied even once a large share of the photos can carry one file
- * date that says nothing at all about when they were taken. A burst whose
- * photos all carry that date must never be moved by it.
- */
-export function dominantFileDay(fileDays: (number | null)[], share: number = COPY_DATE_SHARE): number | null {
+/** How often each file date appears across a whole archive, plus the two facts
+ *  every burst needs answered: which day is winning, and by how much. */
+interface FileDayTally {
+  counts: Map<number, number>;
+  /** Distinct dates, ascending. Sorted once here rather than once per burst. */
+  daysAsc: number[];
+  /** File dates that were actually present; photos with none are in neither
+   *  side of the tally, so an archive of mostly-dateless photos cannot invent a
+   *  dominant date out of the one file that has one. */
+  total: number;
+  /** The earliest date holding the most occurrences, and how many that is. */
+  topDay: number;
+  topCount: number;
+}
+
+function tallyFileDays(fileDays: Iterable<number | null>): FileDayTally {
   const counts = new Map<number, number>();
   let total = 0;
   for (const day of fileDays) {
@@ -73,20 +76,81 @@ export function dominantFileDay(fileDays: (number | null)[], share: number = COP
     counts.set(day, (counts.get(day) ?? 0) + 1);
     total++;
   }
+
+  const daysAsc = [...counts.keys()].sort((a, b) => a - b);
+  /* Strictly greater, walking ascending, so a tie leaves the earliest date
+     holding the title and the answer does not depend on the order the photos
+     happened to be read in. */
+  let topDay = 0;
+  let topCount = 0;
+  for (const day of daysAsc) {
+    const count = counts.get(day) as number;
+    if (count > topCount) {
+      topDay = day;
+      topCount = count;
+    }
+  }
+  return { counts, daysAsc, total, topDay, topCount };
+}
+
+/**
+ * The one file date covering more than `share` of the tally, or null when no
+ * date does -- the same question `elsewhere` was rebuilt to ask, except that
+ * the tally is built once for the whole archive and each burst subtracts its own
+ * contribution instead of the archive being recounted from scratch.
+ *
+ * This is the single most important guard here. Copying or syncing a folder
+ * rewrites every file's date to the moment of the copy, so in a library that
+ * has been copied even once a large share of the photos can carry one file
+ * date that says nothing at all about when they were taken. A burst whose
+ * photos all carry that date must never be moved by it.
+ */
+function dominantFromTally(
+  tally: FileDayTally,
+  removeDay: number | null,
+  removeCount: number,
+  share: number,
+): number | null {
+  const total = tally.total - removeCount;
   if (total === 0) return null;
 
+  /* Exactly one day's count moves, and only downward. Unless it was the day
+     holding the title, the title cannot change hands -- no other count grew,
+     and `topDay` is still the earliest date at the winning count. Answering
+     here is the entire point: the alternative walks every distinct date in the
+     archive, once per burst. */
+  if (tally.topDay !== removeDay) {
+    return tally.topCount / total > share ? tally.topDay : null;
+  }
+
+  /* The burst's own date is the archive's most common one, which is precisely
+     the case the guard exists for and precisely when the tally is small: one
+     date dominating the archive is what forces the walk to stay cheap. */
   let best: number | null = null;
   let bestCount = 0;
-  /* Ties go to the earliest date, so the result does not depend on the order
-     the photos happened to be read in. */
-  for (const day of [...counts.keys()].sort((a, b) => a - b)) {
-    const count = counts.get(day)!;
+  for (const day of tally.daysAsc) {
+    const count = (tally.counts.get(day) as number) - (day === removeDay ? removeCount : 0);
     if (count > bestCount) {
       best = day;
       bestCount = count;
     }
   }
   return bestCount / total > share ? best : null;
+}
+
+/**
+ * The one file date covering more than `share` of the given file dates, or null
+ * when no date does.
+ *
+ * Photos with no file date are left out of both the tally and the total, so an
+ * archive of mostly-dateless photos cannot invent a dominant date out of the one
+ * file that has one.
+ */
+export function dominantFileDay(
+  fileDays: (number | null)[],
+  share: number = COPY_DATE_SHARE,
+): number | null {
+  return dominantFromTally(tallyFileDays(fileDays), null, 0, share);
 }
 
 /**
@@ -111,34 +175,50 @@ export function reconcileDates(inputs: ReconcileInput[]): Reconciled[] {
 
   const bursts = detectBursts(inputs.map((p) => p.exifDay));
 
+  /* Built at most once for the whole archive, and not at all unless a burst
+     gets as far as needing it: each one that does subtracts its own
+     contribution rather than making every other photo be recounted. An archive
+     where every burst is abandoned at an earlier gate never pays for it. */
+  let tally: FileDayTally | null = null;
+  const tallyOf = (): FileDayTally => {
+    tally ??= tallyFileDays(inputs.map((p) => p.fileDay));
+    return tally;
+  };
+
   for (const burst of bursts) {
-    const slice = inputs.slice(burst.start, burst.end + 1);
+    const length = burst.end - burst.start + 1;
 
     /* Every photo has to carry the same file date. One without, or two that
        disagree, and this is not a single shared file event. */
     let fileDay: number | null = null;
     let uniform = true;
-    for (const photo of slice) {
-      if (photo.fileDay === null) {
+    for (let i = burst.start; i <= burst.end; i++) {
+      const own = inputs[i].fileDay;
+      if (own === null) {
         uniform = false;
         break;
       }
-      if (fileDay === null) fileDay = photo.fileDay;
-      else if (fileDay !== photo.fileDay) {
+      if (fileDay === null) fileDay = own;
+      else if (fileDay !== own) {
         uniform = false;
         break;
       }
     }
     if (!uniform || fileDay === null) continue;
 
-    const exifDays = slice.map((p) => p.exifDay);
-    const minExifDay = Math.min(...exifDays);
-    const distinctExifDays = new Set(exifDays).size;
+    /* Read straight off the burst rather than through a slice of it. */
+    let minExifDay = inputs[burst.start].exifDay;
+    const exifDays = new Set<number>();
+    for (let i = burst.start; i <= burst.end; i++) {
+      const own = inputs[i].exifDay;
+      if (own < minExifDay) minExifDay = own;
+      exifDays.add(own);
+    }
 
     /* Too small to be evidence about itself, and a one-day burst has to prove
        its size the only way it can. */
-    if (slice.length < MIN_BURST_PHOTOS) continue;
-    if (distinctExifDays < 2 && slice.length < MIN_SINGLE_DAY_PHOTOS) continue;
+    if (length < MIN_BURST_PHOTOS) continue;
+    if (exifDays.size < 2 && length < MIN_SINGLE_DAY_PHOTOS) continue;
 
     /* The earliest file date rather than the median: a file date is always at
        or after the true capture, so the earliest one carries the smallest
@@ -149,21 +229,12 @@ export function reconcileDates(inputs: ReconcileInput[]): Reconciled[] {
     if (shiftDays < MIN_SHIFT_DAYS) continue;
 
     /* The archive's copy date is evidence about the copy, not about any one
-       photo, so it is counted over everything *except* this burst. Excluding
-       it matters: an archive that is a single burst would otherwise find its
-       own file date dominant and refuse to correct the one thing wrong with
-       it.
-       *
-       * This is the most expensive step in the whole pass -- it walks every
-       * other photo in the archive -- and it is asked last on purpose. Every
-       * gate above is a pure predicate over this burst alone and costs nothing,
-       * so a burst that is too small, or whose implied delay is ordinary, is
-       * dropped before it can cost a walk of the archive. */
-    const elsewhere: (number | null)[] = [];
-    for (let i = 0; i < inputs.length; i++) {
-      if (i < burst.start || i > burst.end) elsewhere.push(inputs[i].fileDay);
-    }
-    const copyDay = dominantFileDay(elsewhere);
+       photo, so it is counted over everything *except* this burst. Excluding it
+       matters: an archive that is a single burst would otherwise find its own
+       file date dominant and refuse to correct the one thing wrong with it.
+       That exclusion is the whole reason this is not simply `topDay`: the
+       burst contributes `length` copies of its own date, and no more. */
+    const copyDay = dominantFromTally(tallyOf(), fileDay, length, COPY_DATE_SHARE);
     if (copyDay !== null && fileDay === copyDay) continue;
 
     for (let i = burst.start; i <= burst.end; i++) {
