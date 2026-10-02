@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { THUMB_MAX_EDGE } from './thumbnail-config.js';
-import { thumbnailSize } from './thumbnail.js';
+import { PREVIEW_MAX_EDGE, THUMB_MAX_EDGE } from './thumbnail-config.js';
+import { scaledSize, thumbnailSize } from './thumbnail.js';
 
 /* `thumbnailSize` is the part of the thumbnail path that can be reasoned about
    without a browser, and it is where the mistakes live: an aspect ratio that
@@ -61,5 +61,45 @@ describe('thumbnailSize', () => {
     const size = thumbnailSize(THUMB_MAX_EDGE * 1000, THUMB_MAX_EDGE);
     expect(size.width).toBe(THUMB_MAX_EDGE);
     expect(size.height).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('scaledSize', () => {
+  /* The preview shares the rule with the thumbnail and differs only in the cap,
+     so it only needs the properties a cap change could break. */
+  it('caps on whichever edge is longer, for either cap', () => {
+    for (const cap of [THUMB_MAX_EDGE, PREVIEW_MAX_EDGE]) {
+      expect(scaledSize(4000, 3000, cap)).toEqual({ width: cap, height: Math.round((cap * 3) / 4) });
+      expect(scaledSize(3000, 4000, cap)).toEqual({ width: Math.round((cap * 3) / 4), height: cap });
+      expect(scaledSize(cap, cap, cap)).toEqual({ width: cap, height: cap });
+    }
+  });
+
+  it('never upscales, at either cap', () => {
+    expect(scaledSize(200, 100, PREVIEW_MAX_EDGE)).toEqual({ width: 200, height: 100 });
+    expect(scaledSize(PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE)).toEqual({
+      width: PREVIEW_MAX_EDGE,
+      height: PREVIEW_MAX_EDGE,
+    });
+  });
+
+  it('gives the selected card more pixels than a thumbnail does', () => {
+    /* The whole reason a preview exists: it has to out-resolve the thumbnail it
+       replaces, or it is not worth generating. */
+    const thumb = scaledSize(4000, 3000, THUMB_MAX_EDGE);
+    const preview = scaledSize(4000, 3000, PREVIEW_MAX_EDGE);
+    expect(preview.width * preview.height).toBeGreaterThan(thumb.width * thumb.height * 10);
+  });
+
+  it('is wide enough that the engine never has to stretch it on a retina display', () => {
+    /* The engine caps the selected card at `photo.width / dpr` CSS px so the
+       blow-up stays at one image pixel per device pixel. If a preview were
+       narrower than the widest card times dpr, the engine's own promise would
+       be quietly broken and the card would look soft for a different reason.
+       The widest card is the stage: --tl-stage-max, less padding and margin. */
+    const stageMax = 1360;
+    const widestCardCssPx = stageMax - 64 - 48;
+    const preview = scaledSize(4000, 3000, PREVIEW_MAX_EDGE);
+    expect(preview.width).toBeGreaterThanOrEqual(widestCardCssPx * 2);
   });
 });

@@ -1,5 +1,7 @@
+import { putPhoto } from './db.js';
 import type { CloudConfig, EngineState, PhotoLayout } from './timeline-engine.js';
 import { computeLayout } from './timeline-engine.js';
+import { makePreview } from './thumbnail.js';
 import type { PhotoDay, PhotoRecord } from './types.js';
 
 export interface CloudRenderer {
@@ -44,6 +46,13 @@ function readConfig(el: HTMLElement): CloudConfig {
 export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
   let photos: PhotoRecord[] = [];
   let objectUrls: string[] = [];
+  /* Preview URLs, by card index, so a card that has been sharpened once keeps
+     its own object URL and never leaks the previous one. Cleared with
+     `objectUrls` whenever the cards themselves are rebuilt. */
+  let previewUrls: (string | null)[] = [];
+  /** Previews being made right now, by photo id. Opening the same photo twice
+     *  while its first preview is still encoding must not start a second. */
+  const previewsInFlight = new Set<string>();
   let layouts: PhotoLayout[] = [];
   let elements: HTMLElement[] = [];
   let selectedIndex: number | null = null;
@@ -62,7 +71,9 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
 
   function buildElements(): void {
     for (const url of objectUrls) URL.revokeObjectURL(url);
+    for (const url of previewUrls) if (url) URL.revokeObjectURL(url);
     objectUrls = [];
+    previewUrls = [];
     cloudEl.innerHTML = '';
     elements = photos.map((photo, i) => {
       const el = document.createElement('div');
@@ -87,7 +98,61 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
       el.appendChild(img);
 
       cloudEl.appendChild(el);
+      previewUrls[i] = null;
       return el;
+    });
+  }
+
+  /* Sharpen the selected card.
+   *
+   * A thumbnail is sized for a 190px card, and the selected card fills the
+   * stage, so the thumbnail is stretched roughly three times and reads as soft
+   * -- the exact complaint the thumbnail was meant to answer, one scale down.
+   * The original is kept for this and nothing else, so the larger image is made
+   * here rather than for every photo at import.
+   *
+   * The card is shown with its thumbnail immediately and upgraded when the
+   * encode lands, so nothing ever opens blank. The preview is cached onto the
+   * record and written back, so the second visit to the same photo is free.
+   *
+   * There is deliberately no hover prefetch: a preview decode is ~3ms, so there
+   * is nothing to hide, and guessing from the pointer would start encodes for
+   * photos the user never opens.
+   */
+  function loadPreview(index: number, photo: PhotoRecord): void {
+    const img = elements[index]?.firstElementChild;
+    if (!(img instanceof HTMLImageElement)) return;
+
+    const apply = (blob: Blob): void => {
+      /* The cards may have been rebuilt by a reconcile toggle while the encode
+         was in flight, in which case this index is a different photo now. */
+      if (!elements[index] || photos[index]?.id !== photo.id) return;
+      const previous = previewUrls[index];
+      if (previous) URL.revokeObjectURL(previous);
+      const url = URL.createObjectURL(blob);
+      previewUrls[index] = url;
+      img.src = url;
+    };
+
+    if (photo.preview) {
+      if (previewUrls[index]) return;
+      apply(photo.preview);
+      return;
+    }
+
+    if (previewsInFlight.has(photo.id)) return;
+    previewsInFlight.add(photo.id);
+    void makePreview(photo.blob).then(async (preview) => {
+      previewsInFlight.delete(photo.id);
+      if (!preview) return;
+      photo.preview = preview;
+      apply(preview);
+      /* Best effort: a failed write only costs a second encode next time. */
+      try {
+        await putPhoto(photo);
+      } catch {
+        /* ignore */
+      }
     });
   }
 
@@ -177,6 +242,7 @@ export function createCloudRenderer(cloudEl: HTMLElement): CloudRenderer {
     setHover(null);
     selectedIndex = index;
     elements[index].classList.add('is-sel');
+    loadPreview(index, photo);
     if (currentState) {
       render(currentState, currentFocus);
     }

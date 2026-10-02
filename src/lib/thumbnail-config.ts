@@ -11,11 +11,18 @@
 /** Longest edge of a stored thumbnail, in pixels. Never upscaled past this. */
 export const THUMB_MAX_EDGE = 480;
 
-/** Longest edge of the preview made on demand for the selected card. The
- *  selected card fills the stage, so this has to cover a large display: at
- *  1360px of stage on a 2x screen the sharpest useful image is ~2720px, and
- *  the engine additionally refuses to blow a photo up past its own pixels. */
-export const PREVIEW_MAX_EDGE = 2048;
+/** Longest edge of the preview made on demand for the selected card.
+ *
+ *  Derived, not guessed. The engine refuses to draw the selected card larger
+ *  than `photo.width / dpr` in CSS pixels — one image pixel per device pixel —
+ *  so a preview has to be at least that wide or it gets stretched, which is
+ *  exactly the softness this is meant to remove. The widest the card can get is
+ *  the stage, `--tl-stage-max` (1360px), less its padding and the engine's
+ *  24px margin; at `devicePixelRatio` 2 that is roughly 2400 device pixels.
+ *
+ *  2560 covers that with headroom, and a 4000x3000 source still comes down to
+ *  about a third of its pixels, which is where the saving is. */
+export const PREVIEW_MAX_EDGE = 2560;
 
 /** JPEG quality. High enough that a card at 380 device pixels shows no
  *  artefacts, low enough that 700 thumbnails stay around 9 MB. */
