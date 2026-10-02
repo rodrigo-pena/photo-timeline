@@ -1,14 +1,14 @@
-import { initTheme } from './lib/theme.js';
-import { getAllPhotos, clearPhotos } from './lib/db.js';
-import type { Dataset, PhotoDay, PhotoRecord } from './lib/types.js';
-import { createEngine } from './lib/timeline-engine.js';
-import type { EngineState } from './lib/timeline-engine.js';
-import { createCloudRenderer } from './lib/cloud.js';
 import { createAxisRenderer } from './lib/axis.js';
+import { createCloudRenderer } from './lib/cloud.js';
+import { clearPhotos, getAllPhotos } from './lib/db.js';
 import { computeHistogram, renderHistogram } from './lib/histogram.js';
-import { initRecordPanel } from './lib/record-panel.js';
-import { getSkipped, clearSkipped } from './lib/skip-count.js';
 import { reconcileDates } from './lib/reconcile.js';
+import { initRecordPanel } from './lib/record-panel.js';
+import { clearSkipped, getSkipped } from './lib/skip-count.js';
+import { initTheme } from './lib/theme.js';
+import type { EngineState } from './lib/timeline-engine.js';
+import { createEngine } from './lib/timeline-engine.js';
+import type { Dataset, PhotoDay, PhotoRecord } from './lib/types.js';
 
 initTheme();
 
@@ -126,7 +126,7 @@ async function main(): Promise<void> {
   function updateChrome(): void {
     const y0 = new Date(dataset.minDay * DAY_MS).getUTCFullYear();
     const y1 = new Date(dataset.maxDay * DAY_MS).getUTCFullYear();
-    datasetLabel.textContent = `${photos.length} records · ${y0}–${y1}`;
+    datasetLabel.textContent = `${photos.length} records · ${y0}-${y1}`;
 
     const parts = [`${photos.length} photos`];
     if (dataset.shiftedCount > 0) parts.push(`${dataset.shiftedCount} dates corrected`);
@@ -146,7 +146,7 @@ async function main(): Promise<void> {
       : "Move photos whose file date disagrees with your camera's";
   }
 
-  /** Repoints every renderer at the current dataset. The photo order can change
+  /** Re-points every renderer at the current dataset. The photo order can change
    *  under a toggle, so the cloud's cards are rebuilt rather than repositioned:
    *  a card's index is what maps it to a photo. */
   function showDataset(previousFocus?: number): void {
