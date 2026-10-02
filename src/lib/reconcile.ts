@@ -131,18 +131,6 @@ export function reconcileDates(inputs: ReconcileInput[]): Reconciled[] {
     }
     if (!uniform || fileDay === null) continue;
 
-    /* The archive's copy date is evidence about the copy, not about any one
-       photo, so it is counted over everything *except* this burst. Excluding
-       it matters: an archive that is a single burst would otherwise find its
-       own file date dominant and refuse to correct the one thing wrong with
-       it. */
-    const elsewhere: (number | null)[] = [];
-    for (let i = 0; i < inputs.length; i++) {
-      if (i < burst.start || i > burst.end) elsewhere.push(inputs[i].fileDay);
-    }
-    const copyDay = dominantFileDay(elsewhere);
-    if (copyDay !== null && fileDay === copyDay) continue;
-
     const exifDays = slice.map((p) => p.exifDay);
     const minExifDay = Math.min(...exifDays);
     const distinctExifDays = new Set(exifDays).size;
@@ -159,6 +147,24 @@ export function reconcileDates(inputs: ReconcileInput[]): Reconciled[] {
        one is a file that predates its own EXIF, which no shift explains. */
     const shiftDays = fileDay - minExifDay;
     if (shiftDays < MIN_SHIFT_DAYS) continue;
+
+    /* The archive's copy date is evidence about the copy, not about any one
+       photo, so it is counted over everything *except* this burst. Excluding
+       it matters: an archive that is a single burst would otherwise find its
+       own file date dominant and refuse to correct the one thing wrong with
+       it.
+       *
+       * This is the most expensive step in the whole pass -- it walks every
+       * other photo in the archive -- and it is asked last on purpose. Every
+       * gate above is a pure predicate over this burst alone and costs nothing,
+       * so a burst that is too small, or whose implied delay is ordinary, is
+       * dropped before it can cost a walk of the archive. */
+    const elsewhere: (number | null)[] = [];
+    for (let i = 0; i < inputs.length; i++) {
+      if (i < burst.start || i > burst.end) elsewhere.push(inputs[i].fileDay);
+    }
+    const copyDay = dominantFileDay(elsewhere);
+    if (copyDay !== null && fileDay === copyDay) continue;
 
     for (let i = burst.start; i <= burst.end; i++) {
       result[i].shiftDays = shiftDays;
