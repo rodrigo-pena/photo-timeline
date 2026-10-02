@@ -88,18 +88,91 @@ npm install          # install dependencies
 npm run dev          # start the dev server (Vite, hot reload)
 npm run build        # type-check and build to dist/
 npm run preview      # serve the production build locally
-npm test             # run the layout invariant tests
+npm test             # run the tests
+npm run bench        # run the benchmarks
 ```
 
 The dev server prints a local URL. Open `http://localhost:5173/` to reach the upload
 screen, and `/timeline.html` for the timeline itself.
+
+## Where the time goes
+
+Measured in Chrome on an M5 Max, 700 photos, 1440×900 at DPR 2. These are the
+numbers behind the design, kept here because they are the only reason several
+odd-looking decisions exist.
+
+**Decoding, not layout.** A whole `render()` — measure, layout, and writing all
+700 cards — is **1.29 ms**, and a pan runs at the display's full refresh rate. The
+arithmetic was never the problem:
+
+| `computeLayout`, focus sweeping | ms/frame |
+|---|---|
+| 320 photos | 0.007 |
+| 700 photos | 0.013 |
+| 2 000 photos | 0.034 |
+| 10 000 photos | 0.167 |
+
+Decoding images was. A 4000×3000 JPEG costs **11.6 ms** to decode and 400 KB to
+hold; the 480 px thumbnail the cloud actually draws costs **0.04 ms** and 13 KB.
+That is **308× to decode and 31× less to hold**, and it is the whole difference
+between 8.15 s of decode for a 700-photo archive and 319 ms.
+
+Seven hundred twelve-megapixel originals want roughly 33 GB resident, which no
+browser holds, so it evicts and re-decodes on demand. Cards arrive as
+placeholders or stale low-res rasters — which is what "images that don't load,
+or load blurry" actually is — and the decode competes with the compositor for the
+first several seconds of browsing, which is the freezing.
+
+So the originals are kept but no longer drawn. A thumbnail is made once at
+import, from a decode the import already had to do. The selected card needs more
+than a thumbnail, so a 2560 px preview is made on demand the first time a photo
+is opened and cached afterwards (52 ms from click to sharp).
+
+**Archives stored before thumbnails existed still work.** They simply draw their
+originals, exactly as before, and the upload screen says so once. Re-importing is
+worth doing for the speed; nothing breaks if you never do.
+
+**Reconciliation used to be quadratic.** Each burst asked whether its file date
+was the archive's copy date by recounting every *other* photo in the archive, so
+the pass cost O(N × bursts) on every load and every toggle of the corrected-dates
+control — 128 ms for 2 000 photos, and growing. The file dates are now tallied
+once for the archive and each burst subtracts its own contribution. The gates
+that reject a burst outright are also checked first, so a burst that was going to
+be abandoned anyway costs a predicate instead of a walk.
+
+**Measured and left alone.** `will-change: transform` on `.tl-thumb` looked like
+704 pinned compositor layers. It is not: a controlled A/B put `UpdateLayer` at
+145 per frame either way — Chrome promotes the cards that have an active
+transition regardless — and removing it made paint, layout and style
+recalculation *worse*, 1.27 → 2.12 ms/frame. It stayed.
+
+### Benchmarks
+
+`npm run bench` covers the two pure passes: `computeLayout` at 320 / 700 / 2 000 /
+10 000 photos, and `reconcileDates` across the archive shapes that decide how
+expensive reconciliation is. The reconcile cases are named by photos-per-shoot
+rather than by burst count, because that — not the burst count — decides whether
+a burst can clear the gates at all.
+
+The engine benchmark runs in Node and needs nothing. For the browser-side costs
+(style recalc, layout, paint, image decode) use `bench/timeline-fixture.js`, which
+serves a synthetic archive in place of IndexedDB:
+
+```js
+await page.addInitScript({ path: 'bench/timeline-fixture.js' })
+await page.goto('/timeline.html?bench=700')   // ?bench=N, ?pool=N, ?recd=MS
+```
+
+It writes nothing to disk and cannot touch a real archive. Its image bytes are a
+pool shared across records, so decode and image-cache numbers from it are a floor
+rather than a ceiling.
 
 ### Tech
 
 - **Vite + TypeScript**, no UI framework.
 - **exifr** for reading capture dates from photo EXIF metadata.
 - **IndexedDB** for local photo storage.
-- **Vitest** for the layout invariants.
+- **Vitest** for the tests and benchmarks.
 - `npx tsc` runs the type-check on its own (`npm run build` runs it as part of the
   build).
 
